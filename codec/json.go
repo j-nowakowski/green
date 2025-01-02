@@ -1,4 +1,4 @@
-package lznode
+package codec
 
 import (
 	"bytes"
@@ -21,8 +21,6 @@ type (
 		b []byte
 	}
 )
-
-var jsonCodec = JSONCodec{}
 
 func (JSONCodec) Encode(v Value) ([]byte, error) {
 	return json.Marshal(v)

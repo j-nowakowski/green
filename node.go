@@ -1,41 +1,33 @@
 package lznode
 
 import (
+	"errors"
 	"fmt"
+
+	"github.com/j-nowakowski/lznode/codec"
 )
 
 type (
 	Node struct {
 		t          NodeType
 		b          []byte
-		codec      Codec
+		codec      codec.Codec
 		valBoolean bool
 		valNumber  float64
 		valString  string
-		valArray   *ArrayNode
-		valObject  *ObjectNode
-	}
-
-	ObjectNode struct {
-		m map[string]*Node
-	}
-
-	ArrayNode struct {
-		a []*Node
-	}
-
-	Array  = [][]byte
-	Object = map[string][]byte
-
-	// Value has concrete type bool, float64, string, Array, Object, or is nil.
-	Value any
-
-	Codec interface {
-		Encode(Value) ([]byte, error)
-		Decode([]byte) (Value, error)
+		valArray   *Array
+		valObject  *Object
 	}
 
 	NodeType int
+
+	Object struct {
+		m map[string]*Node
+	}
+
+	Array struct {
+		a []*Node
+	}
 )
 
 const (
@@ -67,6 +59,8 @@ func (t NodeType) String() string {
 	}
 }
 
+var jsonCodec = codec.JSONCodec{}
+
 func NewJSONNode(b []byte) *Node {
 	n := &Node{
 		b:     b,
@@ -76,6 +70,9 @@ func NewJSONNode(b []byte) *Node {
 }
 
 func (n *Node) Type() (NodeType, error) {
+	if n == nil {
+		return TypeNonexistent, errors.New("*Node.Type: called on nil pointer")
+	}
 	if err := n.hydrate(); err != nil {
 		return TypeNonexistent, err
 	}
@@ -83,6 +80,9 @@ func (n *Node) Type() (NodeType, error) {
 }
 
 func (n *Node) Value() (any, error) {
+	if n == nil {
+		return nil, errors.New("*Node.Value: called on nil pointer")
+	}
 	if err := n.hydrate(); err != nil {
 		return nil, err
 	}
@@ -103,6 +103,9 @@ func (n *Node) Value() (any, error) {
 }
 
 func (n *Node) Number() (float64, error) {
+	if n == nil {
+		return 0, errors.New("*Node.Number: called on nil pointer")
+	}
 	if err := n.hydrate(); err != nil {
 		return 0, err
 	}
@@ -115,6 +118,9 @@ func (n *Node) Number() (float64, error) {
 }
 
 func (n *Node) String() (string, error) {
+	if n == nil {
+		return "", errors.New("*Node.String: called on nil pointer")
+	}
 	if err := n.hydrate(); err != nil {
 		return "", err
 	}
@@ -127,6 +133,9 @@ func (n *Node) String() (string, error) {
 }
 
 func (n *Node) Boolean() (bool, error) {
+	if n == nil {
+		return false, errors.New("*Node.Boolean: called on nil pointer")
+	}
 	if err := n.hydrate(); err != nil {
 		return false, err
 	}
@@ -138,7 +147,10 @@ func (n *Node) Boolean() (bool, error) {
 	}
 }
 
-func (n *Node) Array() (*ArrayNode, error) {
+func (n *Node) Array() (*Array, error) {
+	if n == nil {
+		return nil, errors.New("*Node.Array: called on nil pointer")
+	}
 	if err := n.hydrate(); err != nil {
 		return nil, err
 	}
@@ -150,7 +162,10 @@ func (n *Node) Array() (*ArrayNode, error) {
 	}
 }
 
-func (n *Node) Object() (*ObjectNode, error) {
+func (n *Node) Object() (*Object, error) {
+	if n == nil {
+		return nil, errors.New("*Node.Object: called on nil pointer")
+	}
 	if err := n.hydrate(); err != nil {
 		return nil, err
 	}
@@ -162,7 +177,10 @@ func (n *Node) Object() (*ObjectNode, error) {
 	}
 }
 
-func (n *ObjectNode) GetField(key string) *Node {
+func (n *Object) GetField(key string) *Node {
+	if n == nil {
+		return &Node{} // nonexistent node
+	}
 	node, ok := n.m[key]
 	if !ok {
 		return &Node{} // nonexistent node
@@ -170,11 +188,14 @@ func (n *ObjectNode) GetField(key string) *Node {
 	return node
 }
 
-func (n *ArrayNode) Len() int {
+func (n *Array) Len() int {
+	if n == nil {
+		return 0
+	}
 	return len(n.a)
 }
 
-func (n *ArrayNode) GetElement(i int) *Node {
+func (n *Array) GetElement(i int) *Node {
 	return n.a[i] // allow this to panic if out of bounds
 }
 
@@ -198,9 +219,9 @@ func (n *Node) hydrate() error {
 	case string:
 		n.t = TypeString
 		n.valString = v
-	case Array:
+	case codec.Array:
 		n.t = TypeArray
-		n.valArray = &ArrayNode{
+		n.valArray = &Array{
 			a: make([]*Node, len(v)),
 		}
 		for i, b := range v {
@@ -209,9 +230,9 @@ func (n *Node) hydrate() error {
 				codec: n.codec,
 			}
 		}
-	case Object:
+	case codec.Object:
 		n.t = TypeObject
-		n.valObject = &ObjectNode{
+		n.valObject = &Object{
 			m: make(map[string]*Node, len(v)),
 		}
 		for k, b := range v {

@@ -1,3 +1,3 @@
-module lazyunmarshal/lzdecode
+module github.com/j-nowakowski/lznode
 
-go 1.19
+go 1.23
