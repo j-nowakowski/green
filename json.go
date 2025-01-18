@@ -1,4 +1,4 @@
-package codec
+package lznode
 
 import (
 	"bytes"
@@ -17,10 +17,14 @@ type (
 	// whereas rawJSON takes a shallow copy.
 	//
 	// TODO: This should be benchmarked.
-	rawJSON struct {
-		b []byte
-	}
+	rawJSON []byte
 )
+
+var jsonCodec = JSONCodec{}
+
+func NewJSONNode(b []byte) *Node {
+	return NewNode(b, jsonCodec)
+}
 
 func (JSONCodec) Encode(v Value) ([]byte, error) {
 	return json.Marshal(v)
@@ -36,7 +40,7 @@ func (JSONCodec) Decode(b []byte) (Value, error) {
 		}
 		v := make(Object, len(a))
 		for k, r := range a {
-			v[k] = []byte(r.b)
+			v[k] = NewJSONNode([]byte(r))
 		}
 		return v, nil
 	case bytes.HasPrefix(b, []byte(`[`)):
@@ -47,7 +51,7 @@ func (JSONCodec) Decode(b []byte) (Value, error) {
 		}
 		v := make(Array, len(a))
 		for i, r := range a {
-			v[i] = []byte(r.b)
+			v[i] = NewJSONNode([]byte(r))
 		}
 		return v, nil
 	default:
@@ -59,17 +63,17 @@ func (JSONCodec) Decode(b []byte) (Value, error) {
 	}
 }
 
-func (m *rawJSON) MarshalJSON() ([]byte, error) {
+func (m rawJSON) MarshalJSON() ([]byte, error) {
 	if m == nil {
 		return []byte("null"), nil
 	}
-	return m.b, nil
+	return []byte(m), nil
 }
 
 func (m *rawJSON) UnmarshalJSON(b []byte) error {
 	if m == nil {
 		return errors.New("rawJSON: UnmarshalJSON on nil pointer")
 	}
-	m.b = b
+	*m = b
 	return nil
 }

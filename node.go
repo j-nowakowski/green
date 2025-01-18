@@ -3,30 +3,28 @@ package lznode
 import (
 	"errors"
 	"fmt"
-
-	"github.com/j-nowakowski/lznode/codec"
 )
 
 type (
 	Node struct {
 		t          NodeType
 		b          []byte
-		codec      codec.Codec
+		codec      Codec
 		valBoolean bool
 		valNumber  float64
 		valString  string
-		valArray   *Array
-		valObject  *Object
+		valArray   *ArrayNode
+		valObject  *ObjectNode
 	}
 
 	NodeType int
 
-	Object struct {
-		m map[string]*Node
+	ObjectNode struct {
+		m Object
 	}
 
-	Array struct {
-		a []*Node
+	ArrayNode struct {
+		a Array
 	}
 )
 
@@ -39,6 +37,13 @@ const (
 	TypeArray
 	TypeObject
 )
+
+func NewNode(b []byte, codec Codec) *Node {
+	return &Node{
+		b:     b,
+		codec: codec,
+	}
+}
 
 func (t NodeType) String() string {
 	switch t {
@@ -57,16 +62,6 @@ func (t NodeType) String() string {
 	default:
 		return "nonexistent"
 	}
-}
-
-var jsonCodec = codec.JSONCodec{}
-
-func NewJSONNode(b []byte) *Node {
-	n := &Node{
-		b:     b,
-		codec: jsonCodec,
-	}
-	return n
 }
 
 func (n *Node) Type() (NodeType, error) {
@@ -147,7 +142,7 @@ func (n *Node) Boolean() (bool, error) {
 	}
 }
 
-func (n *Node) Array() (*Array, error) {
+func (n *Node) Array() (*ArrayNode, error) {
 	if n == nil {
 		return nil, errors.New("*Node.Array: called on nil pointer")
 	}
@@ -162,7 +157,7 @@ func (n *Node) Array() (*Array, error) {
 	}
 }
 
-func (n *Node) Object() (*Object, error) {
+func (n *Node) Object() (*ObjectNode, error) {
 	if n == nil {
 		return nil, errors.New("*Node.Object: called on nil pointer")
 	}
@@ -177,7 +172,7 @@ func (n *Node) Object() (*Object, error) {
 	}
 }
 
-func (n *Object) GetField(key string) *Node {
+func (n *ObjectNode) GetField(key string) *Node {
 	if n == nil {
 		return &Node{} // nonexistent node
 	}
@@ -188,14 +183,14 @@ func (n *Object) GetField(key string) *Node {
 	return node
 }
 
-func (n *Array) Len() int {
+func (n *ArrayNode) Len() int {
 	if n == nil {
 		return 0
 	}
 	return len(n.a)
 }
 
-func (n *Array) GetElement(i int) *Node {
+func (n *ArrayNode) GetElement(i int) *Node {
 	return n.a[i] // allow this to panic if out of bounds
 }
 
@@ -219,27 +214,15 @@ func (n *Node) hydrate() error {
 	case string:
 		n.t = TypeString
 		n.valString = v
-	case codec.Array:
+	case Array:
 		n.t = TypeArray
-		n.valArray = &Array{
-			a: make([]*Node, len(v)),
+		n.valArray = &ArrayNode{
+			a: v,
 		}
-		for i, b := range v {
-			n.valArray.a[i] = &Node{
-				b:     b,
-				codec: n.codec,
-			}
-		}
-	case codec.Object:
+	case Object:
 		n.t = TypeObject
-		n.valObject = &Object{
-			m: make(map[string]*Node, len(v)),
-		}
-		for k, b := range v {
-			n.valObject.m[k] = &Node{
-				b:     b,
-				codec: n.codec,
-			}
+		n.valObject = &ObjectNode{
+			m: v,
 		}
 	default:
 		return fmt.Errorf("unexpected type %T", v)

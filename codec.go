@@ -1,10 +1,10 @@
-package codec
+package lznode
 
 type (
 	// Value has concrete type bool, float64, string, Array, Object, or is nil.
 	Value  any
-	Array  = [][]byte
-	Object = map[string][]byte
+	Array  = []*Node
+	Object = map[string]*Node
 
 	Codec interface {
 		Encode(Value) ([]byte, error)
