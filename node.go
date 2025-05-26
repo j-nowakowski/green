@@ -229,9 +229,3 @@ func (n *Node) hydrate() error {
 	}
 	return nil
 }
-
-// func GetSubfield(n Node, keys ...string) (Node, error) {
-// 	for _, k := range keys {
-
-// 	}
-// }

@@ -2,10 +2,10 @@ package lznode
 
 import "testing"
 
-func TestJSONNode(t testing.T) {
-
+func TestJSONNode(t *testing.T) {
+	TestCodec(t, JSONCodec{})
 }
 
-func FuzzJSONNode(f *testing.F) {
+// func FuzzJSONNode(f *testing.F) {
 
-}
+// }
