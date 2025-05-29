@@ -1,4 +1,4 @@
-package lznode
+package lzval
 
 import "testing"
 

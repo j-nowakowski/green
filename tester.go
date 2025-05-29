@@ -1,4 +1,4 @@
-package lznode
+package lzval
 
 import (
 	"testing"
@@ -22,10 +22,10 @@ func TestCodec(t *testing.T, codec Codec) {
 		{"number negative float", -123.456},
 		{"empty string", ""},
 		{"string", "foo"},
-		{"array", []any{float64(1), "two", false, nil, map[string]any{}, []any{}}},
+		{"array", []any{float64(1), "two", false, nil, map[string]any{"foo": "bar"}, []any{"foo", "bar"}}},
 		{"nil array", []any(nil)},
 		{"empty array", []any{}},
-		{"object", map[string]any{"key1": "value1", "key2": float64(2), "key3": true, "key4": nil, "key5": map[string]any{}, "key6": []any{}}},
+		{"object", map[string]any{"key1": "value1", "key2": float64(2), "key3": true, "key4": nil, "key5": map[string]any{"foo": "bar"}, "key6": []any{"foo", "bar"}}},
 		{"nil object", map[string]any(nil)},
 		{"empty object", map[string]any{}},
 	}
@@ -40,7 +40,7 @@ func TestCodec(t *testing.T, codec Codec) {
 	}
 }
 
-func assertEqual(t *testing.T, expected any, actual Value) {
+func assertEqual(t *testing.T, expected any, actual DecodeValue) {
 	t.Helper()
 	switch expect := expected.(type) {
 	case nil, bool, float64, string:
@@ -48,6 +48,7 @@ func assertEqual(t *testing.T, expected any, actual Value) {
 	case []any:
 		assertEqualArray(t, expect, actual)
 	case map[string]any:
+		assertEqualObject(t, expect, actual)
 	default:
 		t.Fatalf("unexpected type %T", expect)
 	}
@@ -59,13 +60,22 @@ func assertEqualArray(t *testing.T, expected []any, actualAny any) {
 	require.True(t, ok, "expected Array type, got %T", actualAny)
 	require.Len(t, actual, len(expected))
 	for i, v := range expected {
+		node, err := actual[i].Resolve()
+		require.NoError(t, err)
+		assertEqual(t, v, node.Value())
 	}
 }
 
-func assertEqualObject(t *testing.T, expected map[string]any, actual Object) {
+func assertEqualObject(t *testing.T, expected map[string]any, actualAny any) {
 	t.Helper()
+	actual, ok := actualAny.(Object)
+	require.True(t, ok, "expected Object type, got %T", actualAny)
 	require.Len(t, actual, len(expected))
 	for k, v := range expected {
-		assert.Equal(t, v, actual[k])
+		field, ok := actual[k]
+		require.True(t, ok, "expected field %s to exist in object", k)
+		node, err := field.Resolve()
+		require.NoError(t, err)
+		assertEqual(t, v, node.Value())
 	}
 }

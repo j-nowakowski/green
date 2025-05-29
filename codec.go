@@ -1,13 +1,13 @@
-package lznode
+package lzval
 
 type (
-	// Value has concrete type bool, float64, string, Array, Object, or is nil.
-	Value  any
-	Array  = []*Node
-	Object = map[string]*Node
+	// DecodeValue has concrete type bool, float64, string, Array, Object, or is nil.
+	DecodeValue any
+	Array       = []*LazyValue
+	Object      = map[string]*LazyValue
 
 	Codec interface {
-		Encode(Value) ([]byte, error)
-		Decode([]byte) (Value, error)
+		Encode(any) ([]byte, error)
+		Decode([]byte) (DecodeValue, error)
 	}
 )
