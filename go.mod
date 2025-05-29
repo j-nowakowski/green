@@ -1,4 +1,4 @@
-module github.com/j-nowakowski/lznode
+module github.com/j-nowakowski/lzval
 
 go 1.23
 

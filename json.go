@@ -6,10 +6,14 @@ import (
 )
 
 type (
+	// JSONCodec is a codec for encoding and decoding JSON data.
+	// It simply wraps the standard library's JSON encoding/decoding,
+	// but stops arrays and objects from being decoded recursively.
 	JSONCodec struct{}
 )
 
-func NewRawJSONNode(b []byte) *LazyValue {
+// NewJSONLazyValue prepares a LazyValue that will decode JSON data lazily.
+func NewJSONLazyValue(b json.RawMessage) *LazyValue {
 	return &LazyValue{
 		Payload: b,
 		Codec:   JSONCodec{},

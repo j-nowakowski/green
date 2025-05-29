@@ -24,7 +24,7 @@ type (
 
 		val  *Value
 		err  error
-		once *sync.Once
+		once sync.Once
 	}
 
 	// Value represents an immutable decoded value from a LazyValue.
@@ -93,8 +93,8 @@ func (n *Value) Type() ValueType {
 	return n.t
 }
 
-// Value returns the value of the Value.
-// The concrete type of the returned value depends on the Value type:
+// Get returns the concrete value.
+// The Go type of the returned value depends on the Value's Type:
 //   - TypeNumber: float64
 //   - TypeBoolean: bool
 //   - TypeString: string
@@ -103,21 +103,21 @@ func (n *Value) Type() ValueType {
 //   - TypeNull: nil
 //
 // If the Value is nil, it returns nil.
-func (n *Value) Value() DecodeValue {
-	if n == nil {
+func (v *Value) Get() DecodeValue {
+	if v == nil {
 		return nil
 	}
-	switch n.t {
+	switch v.t {
 	case TypeNumber:
-		return n.valNumber
+		return v.valNumber
 	case TypeBoolean:
-		return n.valBoolean
+		return v.valBoolean
 	case TypeString:
-		return n.valString
+		return v.valString
 	case TypeObject:
-		return n.valObject
+		return v.valObject
 	case TypeArray:
-		return n.valArray
+		return v.valArray
 	default:
 		return nil
 	}
@@ -246,12 +246,15 @@ func (la *LazyArray) SubArray(l, r int) *LazyArray {
 	return &LazyArray{a: la.a[l:r]}
 }
 
-// Resolve decodes the LazyValue's Payload into a Value.
+// Load decodes the LazyValue's Payload into a Value.
 // If the receiver is nil or has no Payload, it returns nil.
 // An error is returned if the Codec is nil or if decoding fails.
 // If the LazyValue has already been resolved, it returns the cached
 // Value (or error, if any).
-func (lv *LazyValue) Resolve() (*Value, error) {
+func (lv *LazyValue) Load() (*Value, error) {
+	if lv == nil {
+		return nil, nil
+	}
 	lv.once.Do(func() {
 		if len(lv.Payload) == 0 {
 			return
