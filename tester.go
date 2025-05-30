@@ -37,7 +37,7 @@ func TestCodec(t *testing.T, codec Codec) {
 			v, err := codec.Decode(b)
 			require.NoError(t, err)
 			if tt.expectOverride != nil {
-				assert.Equal(t, *tt.expectOverride, v)
+				assertEqual(t, *tt.expectOverride, v)
 			} else {
 				assertEqual(t, tt.value, v)
 			}

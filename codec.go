@@ -1,5 +1,6 @@
 package lzval
 
+//go:generate mockery --name=Codec
 type (
 	// DecodeValue has concrete type bool, float64, string, Array, Object, or is nil.
 	DecodeValue any

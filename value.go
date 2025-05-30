@@ -186,7 +186,7 @@ func (v *Value) Object() *LazyObject {
 		return nil
 	}
 	switch v.t {
-	case TypeArray:
+	case TypeObject:
 		return v.valObject
 	default:
 		return nil
@@ -260,7 +260,7 @@ func (lv *LazyValue) Load() (*Value, error) {
 			return
 		}
 		if lv.Codec == nil {
-			lv.err = errors.New("codec should not be nil")
+			lv.err = errNoCodec
 			return
 		}
 		var v any
@@ -304,3 +304,7 @@ func (lv *LazyValue) UnmarshalJSON(b []byte) error {
 	lv.Codec = JSONCodec{}
 	return nil
 }
+
+var (
+	errNoCodec = errors.New("codec should not be nil")
+)
