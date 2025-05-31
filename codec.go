@@ -2,10 +2,10 @@ package lzval
 
 //go:generate mockery --name=Codec
 type (
-	// DecodeValue has concrete type bool, float64, string, Array, Object, or is nil.
+	// DecodeValue has concrete type bool, float64, string, Slice, Map, or is nil.
 	DecodeValue any
-	Array       = []*LazyValue
-	Object      = map[string]*LazyValue
+	Slice       = []*LazyValue
+	Map         = map[string]*LazyValue
 
 	Codec interface {
 		Encode(any) ([]byte, error)

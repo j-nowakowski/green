@@ -23,9 +23,9 @@ func TestCodec(t *testing.T, codec Codec) {
 		{name: "number negative float", value: -123.456},
 		{name: "empty string", value: ""},
 		{name: "string", value: "foo"},
-		{name: "array", value: []any{float64(1), "two", false, nil, map[string]any{"foo": "bar"}, []any{"foo", "bar"}}},
-		{name: "nil array", value: []any(nil), expectOverride: ptr[any](nil)},
-		{name: "empty array", value: []any{}},
+		{name: "slice", value: []any{float64(1), "two", false, nil, map[string]any{"foo": "bar"}, []any{"foo", "bar"}}},
+		{name: "nil slice", value: []any(nil), expectOverride: ptr[any](nil)},
+		{name: "empty slice", value: []any{}},
 		{name: "object", value: map[string]any{"key1": "value1", "key2": float64(2), "key3": true, "key4": nil, "key5": map[string]any{"foo": "bar"}, "key6": []any{"foo", "bar"}}},
 		{name: "nil object", value: map[string]any(nil), expectOverride: ptr[any](nil)},
 		{name: "empty object", value: map[string]any{}},
@@ -51,9 +51,9 @@ func assertEqual(t *testing.T, expected any, actual DecodeValue) {
 	case nil, bool, float64, string:
 		assert.Equal(t, expect, actual)
 	case []any:
-		assertEqualArray(t, expect, actual)
+		assertEqualSlice(t, expect, actual)
 	case map[string]any:
-		assertEqualObject(t, expect, actual)
+		assertEqualMap(t, expect, actual)
 	default:
 		t.Fatalf("unexpected type %T", expect)
 	}
@@ -65,18 +65,18 @@ func assertEqualLazy(t *testing.T, expected any, actual any) {
 	case nil, bool, float64, string:
 		assert.Equal(t, expect, actual)
 	case []any:
-		assertEqualLazyArray(t, expect, actual)
+		assertEqualLazySlice(t, expect, actual)
 	case map[string]any:
-		assertEqualLazyObject(t, expect, actual)
+		assertEqualLazyMap(t, expect, actual)
 	default:
 		t.Fatalf("unexpected type %T", expect)
 	}
 }
 
-func assertEqualArray(t *testing.T, expected []any, actualAny any) {
+func assertEqualSlice(t *testing.T, expected []any, actualAny any) {
 	t.Helper()
-	actual, ok := actualAny.(Array)
-	require.True(t, ok, "expected Array type, got %T", actualAny)
+	actual, ok := actualAny.(Slice)
+	require.True(t, ok, "expected Slice type, got %T", actualAny)
 	require.Len(t, actual, len(expected))
 	for i, v := range expected {
 		val, err := actual[i].Load()
@@ -85,22 +85,22 @@ func assertEqualArray(t *testing.T, expected []any, actualAny any) {
 	}
 }
 
-func assertEqualLazyArray(t *testing.T, expected []any, actualAny any) {
+func assertEqualLazySlice(t *testing.T, expected []any, actualAny any) {
 	t.Helper()
-	actual, ok := actualAny.(*LazyArray)
-	require.True(t, ok, "expected Array type, got %T", actualAny)
+	actual, ok := actualAny.(*LazySlice)
+	require.True(t, ok, "expected Slice type, got %T", actualAny)
 	require.Equal(t, actual.Len(), len(expected))
 	for i, v := range expected {
-		val, err := actual.Element(i).Load()
+		val, err := actual.At(i).Load()
 		require.NoError(t, err)
 		assertEqualLazy(t, v, val.Get())
 	}
 }
 
-func assertEqualObject(t *testing.T, expected map[string]any, actualAny any) {
+func assertEqualMap(t *testing.T, expected map[string]any, actualAny any) {
 	t.Helper()
-	actual, ok := actualAny.(Object)
-	require.True(t, ok, "expected Object type, got %T", actualAny)
+	actual, ok := actualAny.(Map)
+	require.True(t, ok, "expected Map type, got %T", actualAny)
 	require.Len(t, actual, len(expected))
 	for k, v := range expected {
 		field, ok := actual[k]
@@ -111,13 +111,13 @@ func assertEqualObject(t *testing.T, expected map[string]any, actualAny any) {
 	}
 }
 
-func assertEqualLazyObject(t *testing.T, expected map[string]any, actualAny any) {
+func assertEqualLazyMap(t *testing.T, expected map[string]any, actualAny any) {
 	t.Helper()
-	actual, ok := actualAny.(*LazyObject)
-	require.True(t, ok, "expected Object type, got %T", actualAny)
+	actual, ok := actualAny.(*LazyMap)
+	require.True(t, ok, "expected Map type, got %T", actualAny)
 	require.Equal(t, actual.Len(), len(expected))
 	for k, v := range expected {
-		val, err := actual.Field(k).Load()
+		val, err := actual.Get(k).Load()
 		require.NoError(t, err)
 		assertEqualLazy(t, v, val.Get())
 	}
