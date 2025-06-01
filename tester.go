@@ -81,7 +81,7 @@ func assertEqualSlice(t *testing.T, expected []any, actualAny any) {
 	for i, v := range expected {
 		val, err := actual[i].Load()
 		require.NoError(t, err)
-		assertEqualLazy(t, v, val.Get())
+		assertEqualLazy(t, v, val.Value())
 	}
 }
 
@@ -93,7 +93,7 @@ func assertEqualLazySlice(t *testing.T, expected []any, actualAny any) {
 	for i, v := range expected {
 		val, err := actual.At(i).Load()
 		require.NoError(t, err)
-		assertEqualLazy(t, v, val.Get())
+		assertEqualLazy(t, v, val.Value())
 	}
 }
 
@@ -107,7 +107,7 @@ func assertEqualMap(t *testing.T, expected map[string]any, actualAny any) {
 		require.True(t, ok, "expected field %s to exist in object", k)
 		val, err := field.Load()
 		require.NoError(t, err)
-		assertEqualLazy(t, v, val.Get())
+		assertEqualLazy(t, v, val.Value())
 	}
 }
 
@@ -119,7 +119,7 @@ func assertEqualLazyMap(t *testing.T, expected map[string]any, actualAny any) {
 	for k, v := range expected {
 		val, err := actual.Get(k).Load()
 		require.NoError(t, err)
-		assertEqualLazy(t, v, val.Get())
+		assertEqualLazy(t, v, val.Value())
 	}
 }
 

@@ -3,6 +3,7 @@ package lzval
 import (
 	"encoding/json"
 	"errors"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -14,7 +15,7 @@ func TestLazyValue(t *testing.T) {
 	assertNilValue := func(t *testing.T, v *Value) {
 		assert.Nil(t, v, "expected nil Value")
 		assert.Equal(t, TypeNonexistent, v.Type(), "expected Type() return TypeNonexistent, instead got %s", v.Type())
-		assert.Nil(t, v.Get(), "expected Get() return nil, instead got %v", v.Get())
+		assert.Nil(t, v.Value(), "expected Get() return nil, instead got %v", v.Value())
 	}
 
 	t.Run("if nil, return nil Value", func(t *testing.T) {
@@ -112,14 +113,14 @@ func TestLazyValue(t *testing.T) {
 		v, err := lv.Load()
 		require.NoError(t, err)
 		assert.Equal(t, TypeNull, v.Type(), "expected Type() return TypeNull, instead got %s", v.Type())
-		assert.Nil(t, v.Get(), "expected Get() return nil, instead got %v", v.Get())
+		assert.Nil(t, v.Value(), "expected Get() return nil, instead got %v", v.Value())
 
 		// assert that this result is cached
 		lv.Payload = []byte(`foo2`)
 		v, err = lv.Load()
 		require.NoError(t, err)
 		assert.Equal(t, TypeNull, v.Type(), "expected Type() return TypeNull, instead got %s", v.Type())
-		assert.Nil(t, v.Get(), "expected Get() return nil, instead got %v", v.Get())
+		assert.Nil(t, v.Value(), "expected Get() return nil, instead got %v", v.Value())
 
 		codec = NewMockCodec(t)
 		codec.On("Decode", []byte(`foo`)).Return(nil, nil)
@@ -137,7 +138,7 @@ func TestLazyValue(t *testing.T) {
 		v, err := lv.Load()
 		require.NoError(t, err)
 		assert.Equal(t, TypeBoolean, v.Type(), "expected Type() return TypeBoolean, instead got %s", v.Type())
-		assert.Equal(t, true, v.Get(), "expected Get() return true, instead got %v", v.Get())
+		assert.Equal(t, true, v.Value(), "expected Get() return true, instead got %v", v.Value())
 		assert.Equal(t, true, v.Boolean(), "expected Boolean() return true, instead got %v", v.Boolean())
 
 		// assert that this result is cached
@@ -145,7 +146,7 @@ func TestLazyValue(t *testing.T) {
 		v, err = lv.Load()
 		require.NoError(t, err)
 		assert.Equal(t, TypeBoolean, v.Type(), "expected Type() return TypeBoolean, instead got %s", v.Type())
-		assert.Equal(t, true, v.Get(), "expected Get() return true, instead got %v", v.Get())
+		assert.Equal(t, true, v.Value(), "expected Get() return true, instead got %v", v.Value())
 		assert.Equal(t, true, v.Boolean(), "expected Boolean() return true, instead got %v", v.Boolean())
 
 		codec = NewMockCodec(t)
@@ -164,7 +165,7 @@ func TestLazyValue(t *testing.T) {
 		v, err := lv.Load()
 		require.NoError(t, err)
 		assert.Equal(t, TypeNumber, v.Type(), "expected Type() return TypeNumber, instead got %s", v.Type())
-		assert.Equal(t, float64(123.456), v.Get(), "expected Get() return 123.456, instead got %v", v.Get())
+		assert.Equal(t, float64(123.456), v.Value(), "expected Get() return 123.456, instead got %v", v.Value())
 		assert.Equal(t, float64(123.456), v.Number(), "expected Number() return 123.456, instead got %v", v.Number())
 
 		// assert that this result is cached
@@ -172,7 +173,7 @@ func TestLazyValue(t *testing.T) {
 		v, err = lv.Load()
 		require.NoError(t, err)
 		assert.Equal(t, TypeNumber, v.Type(), "expected Type() return TypeNumber, instead got %s", v.Type())
-		assert.Equal(t, float64(123.456), v.Get(), "expected Get() return 123.456, instead got %v", v.Get())
+		assert.Equal(t, float64(123.456), v.Value(), "expected Get() return 123.456, instead got %v", v.Value())
 		assert.Equal(t, float64(123.456), v.Number(), "expected Number() return 123.456, instead got %v", v.Number())
 
 		codec = NewMockCodec(t)
@@ -191,7 +192,7 @@ func TestLazyValue(t *testing.T) {
 		v, err := lv.Load()
 		require.NoError(t, err)
 		assert.Equal(t, TypeString, v.Type(), "expected Type() return TypeString, instead got %s", v.Type())
-		assert.Equal(t, "bar", v.Get(), "expected Get() return \"bar\", instead got %v", v.Get())
+		assert.Equal(t, "bar", v.Value(), "expected Get() return \"bar\", instead got %v", v.Value())
 		assert.Equal(t, "bar", v.String(), "expected String() return \"bar\", instead got %q", v.String())
 
 		// assert that this result is cached
@@ -199,7 +200,7 @@ func TestLazyValue(t *testing.T) {
 		v, err = lv.Load()
 		require.NoError(t, err)
 		assert.Equal(t, TypeString, v.Type(), "expected Type() return TypeString, instead got %s", v.Type())
-		assert.Equal(t, "bar", v.Get(), "expected Get() return \"bar\", instead got %v", v.Get())
+		assert.Equal(t, "bar", v.Value(), "expected Get() return \"bar\", instead got %v", v.Value())
 		assert.Equal(t, "bar", v.String(), "expected String() return \"bar\", instead got %q", v.String())
 
 		codec = NewMockCodec(t)
@@ -230,7 +231,7 @@ func TestLazyValue(t *testing.T) {
 		v, err := lv.Load()
 		require.NoError(t, err)
 		assert.Equal(t, TypeSlice, v.Type(), "expected Type() return TypeSlice, instead got %s", v.Type())
-		assertEqual(t, v.Get())
+		assertEqual(t, v.Value())
 		assertEqual(t, v.Slice())
 
 		// assert that this result is cached
@@ -238,7 +239,7 @@ func TestLazyValue(t *testing.T) {
 		v, err = lv.Load()
 		require.NoError(t, err)
 		assert.Equal(t, TypeSlice, v.Type(), "expected Type() return TypeSlice, instead got %s", v.Type())
-		assertEqual(t, v.Get())
+		assertEqual(t, v.Value())
 		assertEqual(t, v.Slice())
 	})
 
@@ -262,7 +263,7 @@ func TestLazyValue(t *testing.T) {
 		v, err := lv.Load()
 		require.NoError(t, err)
 		assert.Equal(t, TypeMap, v.Type(), "expected Type() return TypeMap, instead got %s", v.Type())
-		assertEqual(t, v.Get())
+		assertEqual(t, v.Value())
 		assertEqual(t, v.Map())
 
 		// assert that this result is cached
@@ -270,7 +271,7 @@ func TestLazyValue(t *testing.T) {
 		v, err = lv.Load()
 		require.NoError(t, err)
 		assert.Equal(t, TypeMap, v.Type(), "expected Type() return TypeMap, instead got %s", v.Type())
-		assertEqual(t, v.Get())
+		assertEqual(t, v.Value())
 		assertEqual(t, v.Map())
 	})
 
@@ -301,7 +302,7 @@ func TestLazyValue(t *testing.T) {
 					return err
 				}
 				assert.Equal(t, TypeString, v.Type(), "expected Type() return TypeString, instead got %s", v.Type())
-				assert.Equal(t, "foo", v.Get(), "expected Get() return \"foo\", instead got %v", v.Get())
+				assert.Equal(t, "foo", v.Value(), "expected Get() return \"foo\", instead got %v", v.Value())
 				assert.Equal(t, "foo", v.String(), "expected String() return \"foo\", instead got %q", v.String())
 				return nil
 			})
@@ -498,4 +499,116 @@ func TestLazySlice(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, s, gotS)
 	})
+}
+
+func BenchmarkValue(b *testing.B) {
+	/*
+		Benchmarking found that the current implementation is slightly superior
+		to an alternative implementation that uses a single `any` field
+		and type assertions.
+
+		BenchmarkValue/latency:_current_value_impl-8         	85498476	        13.87 ns/op	      16 B/op	       1 allocs/op
+		BenchmarkValue/latency:_alt_value_impl-8             	83965011	        14.28 ns/op	      16 B/op	       1 allocs/op
+		BenchmarkValue/throughput:_current_value_impl-8      	 8560072	       140.5 ns/op	      16 B/op	       1 allocs/op
+		BenchmarkValue/throughput:_alt_value_impl-8          	 8550756	       140.7 ns/op	      16 B/op	       1 allocs/op
+	*/
+
+	b.Run("latency: current value impl", func(b *testing.B) {
+		for b.Loop() {
+			v := &Value{
+				t:         TypeString,
+				valString: "foo",
+			}
+			_ = v.String()
+			_ = v.Value()
+		}
+	})
+
+	b.Run("latency: alt value impl", func(b *testing.B) {
+		for b.Loop() {
+			v := &altValue{
+				t:   TypeString,
+				val: "foo",
+			}
+			_ = v.String()
+			_ = v.Value()
+		}
+	})
+
+	b.Run("throughput: current value impl", func(b *testing.B) {
+		var wg sync.WaitGroup
+		for b.Loop() {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				v := &Value{
+					t:         TypeString,
+					valString: "foo",
+				}
+				_ = v.String()
+				_ = v.Value()
+			}()
+		}
+		wg.Wait()
+	})
+
+	b.Run("throughput: alt value impl", func(b *testing.B) {
+		var wg sync.WaitGroup
+		for b.Loop() {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				v := &altValue{
+					t:   TypeString,
+					val: "foo",
+				}
+				_ = v.String()
+				_ = v.Value()
+			}()
+		}
+		wg.Wait()
+	})
+}
+
+type altValue struct {
+	t   ValueType
+	val any
+}
+
+func (v *altValue) Value() DecodeValue {
+	if v == nil {
+		return nil
+	}
+	switch v.t {
+	case TypeNumber:
+		vv, _ := v.val.(float64)
+		return vv
+	case TypeBoolean:
+		vv, _ := v.val.(bool)
+		return vv
+	case TypeString:
+		vv, _ := v.val.(string)
+		return vv
+	case TypeMap:
+		vv, _ := v.val.(*LazyMap)
+		return vv
+	case TypeSlice:
+		vv, _ := v.val.(*LazySlice)
+		return vv
+	default:
+		return nil
+	}
+}
+
+func (v *altValue) String() string {
+	if v == nil {
+		return ""
+	}
+	switch v.t {
+	case TypeString:
+		vv, _ := v.val.(string)
+		return vv
+	default:
+		return ""
+	}
 }

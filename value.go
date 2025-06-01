@@ -94,7 +94,7 @@ func (n *Value) Type() ValueType {
 	return n.t
 }
 
-// Get returns the concrete value.
+// Value returns the concrete value.
 // The Go type of the returned value depends on the Value's Type:
 //   - TypeNumber: float64
 //   - TypeBoolean: bool
@@ -104,7 +104,7 @@ func (n *Value) Type() ValueType {
 //   - TypeNull: nil
 //
 // If the Value is nil, it returns nil.
-func (v *Value) Get() DecodeValue {
+func (v *Value) Value() DecodeValue {
 	if v == nil {
 		return nil
 	}
