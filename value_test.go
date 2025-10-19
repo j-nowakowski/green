@@ -1,8 +1,10 @@
 package lzval
 
 import (
+	"crypto/rand"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
 
@@ -19,7 +21,7 @@ func TestLazyValue(t *testing.T) {
 	}
 
 	t.Run("if nil, return nil Value", func(t *testing.T) {
-		var lv *LazyValue
+		var lv *MemValue
 		v, err := lv.Load()
 		require.NoError(t, err)
 		assertNilValue(t, v)
@@ -30,7 +32,7 @@ func TestLazyValue(t *testing.T) {
 	})
 
 	t.Run("if empty Payload, return nil Value", func(t *testing.T) {
-		lv := &LazyValue{Payload: []byte{}}
+		lv := &MemValue{Payload: []byte{}}
 		v, err := lv.Load()
 		require.NoError(t, err)
 		assertNilValue(t, v)
@@ -41,12 +43,12 @@ func TestLazyValue(t *testing.T) {
 		require.NoError(t, err)
 		assertNilValue(t, v)
 
-		lv = &LazyValue{Payload: []byte{}}
+		lv = &MemValue{Payload: []byte{}}
 		vAny, err := lv.RecursiveLoad()
 		require.NoError(t, err)
 		assert.Nil(t, vAny)
 
-		lv = &LazyValue{Payload: nil}
+		lv = &MemValue{Payload: nil}
 		v, err = lv.Load()
 		require.NoError(t, err)
 		assertNilValue(t, v)
@@ -60,14 +62,14 @@ func TestLazyValue(t *testing.T) {
 		require.NoError(t, err)
 		assertNilValue(t, v)
 
-		lv = &LazyValue{Payload: nil}
+		lv = &MemValue{Payload: nil}
 		vAny, err = lv.RecursiveLoad()
 		require.NoError(t, err)
 		assert.Nil(t, vAny)
 	})
 
 	t.Run("if no Codec, return error", func(t *testing.T) {
-		lv := &LazyValue{Payload: []byte(`"foo"`)}
+		lv := &MemValue{Payload: []byte(`"foo"`)}
 		_, err := lv.Load()
 		require.ErrorIs(t, err, errNoCodec)
 
@@ -76,7 +78,7 @@ func TestLazyValue(t *testing.T) {
 		_, err = lv.Load()
 		require.ErrorIs(t, err, errNoCodec)
 
-		lv = &LazyValue{Payload: []byte(`"foo"`)}
+		lv = &MemValue{Payload: []byte(`"foo"`)}
 		_, err = lv.RecursiveLoad()
 		require.ErrorIs(t, err, errNoCodec)
 	})
@@ -86,7 +88,7 @@ func TestLazyValue(t *testing.T) {
 		b := []byte(`"foo"`)
 		myErr := errors.New("decode error")
 		codec.On("Decode", b).Return(nil, myErr)
-		lv := &LazyValue{Payload: []byte(`"foo"`), Codec: codec}
+		lv := &MemValue{Payload: []byte(`"foo"`), Codec: codec}
 		_, err := lv.Load()
 		require.ErrorIs(t, err, myErr, "expected myErr from Load()")
 
@@ -100,7 +102,7 @@ func TestLazyValue(t *testing.T) {
 
 		codec = NewMockCodec(t)
 		codec.On("Decode", b).Return(nil, myErr)
-		lv = &LazyValue{Payload: []byte(`"foo"`), Codec: codec}
+		lv = &MemValue{Payload: []byte(`"foo"`), Codec: codec}
 		_, err = lv.RecursiveLoad()
 		assert.ErrorIs(t, err, myErr)
 	})
@@ -109,7 +111,7 @@ func TestLazyValue(t *testing.T) {
 		codec := NewMockCodec(t)
 		codec.On("Decode", []byte(`foo`)).Return(nil, nil)
 		codec.On("Decode", []byte(`foo2`)).Return(true, nil).Maybe() // should not be called anyway
-		lv := &LazyValue{Payload: []byte(`foo`), Codec: codec}
+		lv := &MemValue{Payload: []byte(`foo`), Codec: codec}
 		v, err := lv.Load()
 		require.NoError(t, err)
 		assert.Equal(t, TypeNull, v.Type(), "expected Type() return TypeNull, instead got %s", v.Type())
@@ -124,7 +126,7 @@ func TestLazyValue(t *testing.T) {
 
 		codec = NewMockCodec(t)
 		codec.On("Decode", []byte(`foo`)).Return(nil, nil)
-		lv = &LazyValue{Payload: []byte(`foo`), Codec: codec}
+		lv = &MemValue{Payload: []byte(`foo`), Codec: codec}
 		v2, err := lv.RecursiveLoad()
 		require.NoError(t, err)
 		assert.Nil(t, v2)
@@ -134,7 +136,7 @@ func TestLazyValue(t *testing.T) {
 		codec := NewMockCodec(t)
 		codec.On("Decode", []byte(`foo`)).Return(true, nil)
 		codec.On("Decode", []byte(`foo2`)).Return(nil, nil).Maybe() // should not be called anyway
-		lv := &LazyValue{Payload: []byte(`foo`), Codec: codec}
+		lv := &MemValue{Payload: []byte(`foo`), Codec: codec}
 		v, err := lv.Load()
 		require.NoError(t, err)
 		assert.Equal(t, TypeBoolean, v.Type(), "expected Type() return TypeBoolean, instead got %s", v.Type())
@@ -151,7 +153,7 @@ func TestLazyValue(t *testing.T) {
 
 		codec = NewMockCodec(t)
 		codec.On("Decode", []byte(`foo`)).Return(true, nil)
-		lv = &LazyValue{Payload: []byte(`foo`), Codec: codec}
+		lv = &MemValue{Payload: []byte(`foo`), Codec: codec}
 		v2, err := lv.RecursiveLoad()
 		require.NoError(t, err)
 		assert.Equal(t, true, v2)
@@ -161,7 +163,7 @@ func TestLazyValue(t *testing.T) {
 		codec := NewMockCodec(t)
 		codec.On("Decode", []byte(`foo`)).Return(float64(123.456), nil)
 		codec.On("Decode", []byte(`foo2`)).Return(float64(789.012), nil).Maybe() // should not be called anyway
-		lv := &LazyValue{Payload: []byte(`foo`), Codec: codec}
+		lv := &MemValue{Payload: []byte(`foo`), Codec: codec}
 		v, err := lv.Load()
 		require.NoError(t, err)
 		assert.Equal(t, TypeNumber, v.Type(), "expected Type() return TypeNumber, instead got %s", v.Type())
@@ -178,7 +180,7 @@ func TestLazyValue(t *testing.T) {
 
 		codec = NewMockCodec(t)
 		codec.On("Decode", []byte(`foo`)).Return(123.456, nil)
-		lv = &LazyValue{Payload: []byte(`foo`), Codec: codec}
+		lv = &MemValue{Payload: []byte(`foo`), Codec: codec}
 		v2, err := lv.RecursiveLoad()
 		require.NoError(t, err)
 		assert.Equal(t, 123.456, v2)
@@ -188,7 +190,7 @@ func TestLazyValue(t *testing.T) {
 		codec := NewMockCodec(t)
 		codec.On("Decode", []byte(`foo`)).Return("bar", nil)
 		codec.On("Decode", []byte(`foo2`)).Return("bar2", nil).Maybe() // should not be called anyway
-		lv := &LazyValue{Payload: []byte(`foo`), Codec: codec}
+		lv := &MemValue{Payload: []byte(`foo`), Codec: codec}
 		v, err := lv.Load()
 		require.NoError(t, err)
 		assert.Equal(t, TypeString, v.Type(), "expected Type() return TypeString, instead got %s", v.Type())
@@ -205,7 +207,7 @@ func TestLazyValue(t *testing.T) {
 
 		codec = NewMockCodec(t)
 		codec.On("Decode", []byte(`foo`)).Return("bar", nil)
-		lv = &LazyValue{Payload: []byte(`foo`), Codec: codec}
+		lv = &MemValue{Payload: []byte(`foo`), Codec: codec}
 		v2, err := lv.RecursiveLoad()
 		require.NoError(t, err)
 		assert.Equal(t, "bar", v2)
@@ -213,10 +215,10 @@ func TestLazyValue(t *testing.T) {
 
 	t.Run("happy path: decode slice", func(t *testing.T) {
 		codec := NewMockCodec(t)
-		a := []*LazyValue{new(LazyValue), new(LazyValue)}
+		a := []*MemValue{new(MemValue), new(MemValue)}
 		assertEqual := func(t *testing.T, laAny any) {
 			t.Helper()
-			la, ok := laAny.(*LazySlice)
+			la, ok := laAny.(*ImmutableSlice)
 			require.True(t, ok, "expected LazyMap type, got %T", laAny)
 			assert.Equal(t, 2, la.Len(), "expected object to have 2 elements, instead got %d", la.Len())
 			assert.Equal(t, a[0], la.At(0), "expected At(0) to return %v, instead got %v",
@@ -224,10 +226,10 @@ func TestLazyValue(t *testing.T) {
 			assert.Equal(t, a[1], la.At(1), "expected At(1) to return %v, instead got %v",
 				a[1], la.At(1))
 		}
-		a2 := []*LazyValue{new(LazyValue)}
+		a2 := []*MemValue{new(MemValue)}
 		codec.On("Decode", []byte(`foo`)).Return(a, nil)
 		codec.On("Decode", []byte(`foo2`)).Return(a2, nil).Maybe() // should not be called anyway
-		lv := &LazyValue{Payload: []byte(`foo`), Codec: codec}
+		lv := &MemValue{Payload: []byte(`foo`), Codec: codec}
 		v, err := lv.Load()
 		require.NoError(t, err)
 		assert.Equal(t, TypeSlice, v.Type(), "expected Type() return TypeSlice, instead got %s", v.Type())
@@ -245,10 +247,10 @@ func TestLazyValue(t *testing.T) {
 
 	t.Run("happy path: decode object", func(t *testing.T) {
 		codec := NewMockCodec(t)
-		m := map[string]*LazyValue{"key1": new(LazyValue), "key2": new(LazyValue)}
+		m := map[string]*MemValue{"key1": new(MemValue), "key2": new(MemValue)}
 		assertEqual := func(t *testing.T, loAny any) {
 			t.Helper()
-			lo, ok := loAny.(*LazyMap)
+			lo, ok := loAny.(*ImmutableMap)
 			require.True(t, ok, "expected LazyMap type, got %T", loAny)
 			assert.Equal(t, 2, lo.Len(), "expected object to have 2 keys, instead got %d", lo.Len())
 			assert.Equal(t, m["key1"], lo.Get("key1"), "expected Get(\"key1\") to return %v, instead got %v",
@@ -256,10 +258,10 @@ func TestLazyValue(t *testing.T) {
 			assert.Equal(t, m["key2"], lo.Get("key2"), "expected Get(\"key2\") to return %v, instead got %v",
 				m["key2"], lo.Get("key2"))
 		}
-		m2 := map[string]*LazyValue{"key3": new(LazyValue)}
+		m2 := map[string]*MemValue{"key3": new(MemValue)}
 		codec.On("Decode", []byte(`foo`)).Return(m, nil)
 		codec.On("Decode", []byte(`foo2`)).Return(m2, nil).Maybe() // should not be called anyway
-		lv := &LazyValue{Payload: []byte(`foo`), Codec: codec}
+		lv := &MemValue{Payload: []byte(`foo`), Codec: codec}
 		v, err := lv.Load()
 		require.NoError(t, err)
 		assert.Equal(t, TypeMap, v.Type(), "expected Type() return TypeMap, instead got %s", v.Type())
@@ -276,24 +278,23 @@ func TestLazyValue(t *testing.T) {
 	})
 
 	t.Run("if nil, UnmarshalJSON errors", func(t *testing.T) {
-		var lv *LazyValue
+		var lv *MemValue
 		err := lv.UnmarshalJSON([]byte(`"foo"`))
 		require.Error(t, err)
 	})
 
 	t.Run("UnmarshalJSON happy path", func(t *testing.T) {
-		lv := &LazyValue{}
+		lv := &MemValue{}
 		err := lv.UnmarshalJSON([]byte(`"foo"`))
 		require.NoError(t, err)
 		assert.Equal(t, []byte(`"foo"`), lv.Payload, "expected Payload to be %q, instead got %q", `"foo"`, lv.Payload)
-		assert.Equal(t, JSONCodec{}, lv.Codec, "expected Codec to be JSONCodec{}, instead got %T", lv.Codec)
 	})
 
 	t.Run("Load is concurrency safe", func(t *testing.T) {
 		codec := NewMockCodec(t)
 		n := 1000
 		codec.On("Decode", []byte(`"foo"`)).Return("foo", nil).Times(1)
-		lv := &LazyValue{Payload: []byte(`"foo"`), Codec: codec}
+		lv := &MemValue{Payload: []byte(`"foo"`), Codec: codec}
 		var eg errgroup.Group
 		for range n {
 			eg.Go(func() error {
@@ -314,9 +315,9 @@ func TestLazyValue(t *testing.T) {
 func TestLazyMap(t *testing.T) {
 	t.Run("Get with non-empty map", func(t *testing.T) {
 		codec := NewMockCodec(t)
-		m := map[string]*LazyValue{"key1": new(LazyValue), "key2": new(LazyValue)}
+		m := map[string]*MemValue{"key1": new(MemValue), "key2": new(MemValue)}
 		codec.On("Decode", []byte(`foo`)).Return(m, nil)
-		lz := &LazyValue{Payload: []byte(`foo`), Codec: codec}
+		lz := &MemValue{Payload: []byte(`foo`), Codec: codec}
 		v, err := lz.Load()
 		require.NoError(t, err)
 		lo := v.Map()
@@ -331,9 +332,9 @@ func TestLazyMap(t *testing.T) {
 
 	t.Run("Get with nil map", func(t *testing.T) {
 		codec := NewMockCodec(t)
-		m := map[string]*LazyValue(nil)
+		m := map[string]*MemValue(nil)
 		codec.On("Decode", []byte(`foo`)).Return(m, nil)
-		lz := &LazyValue{Payload: []byte(`foo`), Codec: codec}
+		lz := &MemValue{Payload: []byte(`foo`), Codec: codec}
 		v, err := lz.Load()
 		require.NoError(t, err)
 		lo := v.Map()
@@ -343,12 +344,12 @@ func TestLazyMap(t *testing.T) {
 	})
 
 	t.Run("if nil, Len returns 0", func(t *testing.T) {
-		var lv *LazyMap
+		var lv *ImmutableMap
 		assert.Equal(t, 0, lv.Len(), "expected Len() on nil LazyMap to return 0, instead got %d", lv.Len())
 	})
 
 	t.Run("if nil, Get returns nil", func(t *testing.T) {
-		var lv *LazyMap
+		var lv *ImmutableMap
 		assert.Nil(t, lv.Get("foo"), "expected Get(\"foo\") on nil LazyMap to return nil, instead got %v",
 			lv.Get("foo"))
 	})
@@ -384,9 +385,9 @@ func TestLazyMap(t *testing.T) {
 func TestLazySlice(t *testing.T) {
 	t.Run("non-empty slice", func(t *testing.T) {
 		codec := NewMockCodec(t)
-		a := []*LazyValue{new(LazyValue), new(LazyValue), new(LazyValue)}
+		a := []*MemValue{new(MemValue), new(MemValue), new(MemValue)}
 		codec.On("Decode", []byte(`foo`)).Return(a, nil)
-		lz := &LazyValue{Payload: []byte(`foo`), Codec: codec}
+		lz := &MemValue{Payload: []byte(`foo`), Codec: codec}
 		v, err := lz.Load()
 		require.NoError(t, err)
 		la := v.Slice()
@@ -434,9 +435,9 @@ func TestLazySlice(t *testing.T) {
 
 	t.Run("nil slice", func(t *testing.T) {
 		codec := NewMockCodec(t)
-		a := []*LazyValue(nil)
+		a := []*MemValue(nil)
 		codec.On("Decode", []byte(`foo`)).Return(a, nil)
-		lz := &LazyValue{Payload: []byte(`foo`), Codec: codec}
+		lz := &MemValue{Payload: []byte(`foo`), Codec: codec}
 		v, err := lz.Load()
 		require.NoError(t, err)
 		la := v.Slice()
@@ -461,7 +462,7 @@ func TestLazySlice(t *testing.T) {
 	})
 
 	t.Run("if nil, SubSlice handles", func(t *testing.T) {
-		var lv *LazySlice
+		var lv *ImmutableSlice
 		assert.Panics(t, func() {
 			lv.SubSlice(0, 1)
 		})
@@ -469,13 +470,13 @@ func TestLazySlice(t *testing.T) {
 	})
 
 	t.Run("if nil, Len returns 0", func(t *testing.T) {
-		var lv *LazySlice
+		var lv *ImmutableSlice
 		assert.Equal(t, 0, lv.Len(), "expected Len() on nil LazySlice to return 0, instead got %d", lv.Len())
 	})
 
 	t.Run("if nil, At panics", func(t *testing.T) {
 		assert.Panics(t, func() {
-			var lv *LazySlice
+			var lv *ImmutableSlice
 			lv.At(0)
 		})
 	})
@@ -507,67 +508,44 @@ func BenchmarkValue(b *testing.B) {
 		to an alternative implementation that uses a single `any` field
 		and type assertions.
 
-		BenchmarkValue/latency:_current_value_impl-8         	85498476	        13.87 ns/op	      16 B/op	       1 allocs/op
-		BenchmarkValue/latency:_alt_value_impl-8             	83965011	        14.28 ns/op	      16 B/op	       1 allocs/op
-		BenchmarkValue/throughput:_current_value_impl-8      	 8560072	       140.5 ns/op	      16 B/op	       1 allocs/op
-		BenchmarkValue/throughput:_alt_value_impl-8          	 8550756	       140.7 ns/op	      16 B/op	       1 allocs/op
+		BenchmarkValue/current_impl:latency-8         	247309478	         4.709 ns/op	       0 B/op	       0 allocs/op
+		BenchmarkValue/current_impl:throughput-8      	   16521	     72471 ns/op	   16040 B/op	     501 allocs/op
+		BenchmarkValue/alt_impl:latency-8             	215735378	         5.563 ns/op	       0 B/op	       0 allocs/op
+		BenchmarkValue/alt_impl:throughput-8          	   16556	     72743 ns/op	   16017 B/op	     501 allocs/op
 	*/
-
-	b.Run("latency: current value impl", func(b *testing.B) {
-		for b.Loop() {
-			v := &Value{
-				t:         TypeString,
-				valString: "foo",
-			}
-			_ = v.String()
-			_ = v.Value()
+	benchCurrent := func(b *testing.B) {
+		v := &Value{
+			t:         TypeString,
+			valString: "foo",
 		}
-	})
-
-	b.Run("latency: alt value impl", func(b *testing.B) {
-		for b.Loop() {
-			v := &altValue{
-				t:   TypeString,
-				val: "foo",
-			}
-			_ = v.String()
-			_ = v.Value()
+		vs := v.String()
+		if vs != "foo" {
+			b.Fatal("expected String() to return 'foo', instead got", vs)
 		}
-	})
-
-	b.Run("throughput: current value impl", func(b *testing.B) {
-		var wg sync.WaitGroup
-		for b.Loop() {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				v := &Value{
-					t:         TypeString,
-					valString: "foo",
-				}
-				_ = v.String()
-				_ = v.Value()
-			}()
+		va := v.Value()
+		if va != "foo" {
+			b.Fatal("expected String() to return 'foo', instead got", vs)
 		}
-		wg.Wait()
-	})
+	}
 
-	b.Run("throughput: alt value impl", func(b *testing.B) {
-		var wg sync.WaitGroup
-		for b.Loop() {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				v := &altValue{
-					t:   TypeString,
-					val: "foo",
-				}
-				_ = v.String()
-				_ = v.Value()
-			}()
+	benchAlt := func(b *testing.B) {
+		v := &altValue{
+			t:   TypeString,
+			val: "foo",
 		}
-		wg.Wait()
-	})
+		vs := v.String()
+		if vs != "foo" {
+			b.Fatal("expected String() to return 'foo', instead got", vs)
+		}
+		va := v.Value()
+		if va != "foo" {
+			b.Fatal("expected String() to return 'foo', instead got", vs)
+		}
+	}
+
+	throughputChunkSize := 1000
+	benchmarkLatencyThroughput(b, "current_impl", throughputChunkSize, benchCurrent)
+	benchmarkLatencyThroughput(b, "alt_impl", throughputChunkSize, benchAlt)
 }
 
 type altValue struct {
@@ -590,10 +568,10 @@ func (v *altValue) Value() DecodeValue {
 		vv, _ := v.val.(string)
 		return vv
 	case TypeMap:
-		vv, _ := v.val.(*LazyMap)
+		vv, _ := v.val.(*ImmutableMap)
 		return vv
 	case TypeSlice:
-		vv, _ := v.val.(*LazySlice)
+		vv, _ := v.val.(*ImmutableSlice)
 		return vv
 	default:
 		return nil
@@ -611,4 +589,239 @@ func (v *altValue) String() string {
 	default:
 		return ""
 	}
+}
+
+func TestJSONLazyValueAdHoc(b *testing.T) {
+	bigMapSize := 1000
+	m := map[string]any{
+		"a": nil,
+		"b": 3.14,
+		"c": true,
+		"d": "foo",
+		"e": map[string]any{"k": "v"},
+		"f": []any{"e1", "e2"},
+		"g": map[string]any{
+			"a": nil,
+			"b": 3.14,
+			"c": true,
+			"d": "foo",
+			"e": map[string]any{"k": "v"},
+			"f": []any{"e1", "e2"},
+			"g": map[string]any{
+				"a": nil,
+				"b": 3.14,
+				"c": true,
+				"d": "foo",
+				"e": map[string]any{"k": "v"},
+				"f": []any{"e1", "e2"},
+			},
+		},
+		"h": map[string]any{
+			"a": nil,
+			"b": 3.14,
+			"c": true,
+			"d": "foo",
+			"e": map[string]any{"k": "v"},
+			"f": []any{"e1", "e2"},
+			"g": map[string]any{
+				"a": nil,
+				"b": 3.14,
+				"c": true,
+				"d": "foo",
+				"e": map[string]any{"k": "v"},
+				"f": []any{"e1", "e2"},
+			},
+		},
+	}
+	bigMap := make(map[string]any, bigMapSize)
+	for range bigMapSize {
+		bigMap[rand.Text()] = rand.Text()
+	}
+	m["aa"] = bigMap
+	m["zz"] = bigMap
+	bsBig, err := json.Marshal(m)
+	requireNoError(b, err)
+
+	lv := NewJSON(bsBig)
+	v, err := lv.Load()
+	requireNoError(b, err)
+	lvg := v.Map().Get("g")
+	vg, err := lvg.Load()
+	requireNoError(b, err)
+	lvgg := vg.Map().Get("g")
+	vgg, err := lvgg.Load()
+	requireNoError(b, err)
+	lvggf := vgg.Map().Get("f")
+	vggf, err := lvggf.Load()
+	requireNoError(b, err)
+	vggfSlice := vggf.Slice()
+	elems := make([]string, vggfSlice.Len())
+	for i, lve := range vggfSlice.All() {
+		ve, err := lve.Load()
+		requireNoError(b, err)
+		require.Equal(b, TypeString, ve.Type())
+		elems[i] = ve.String()
+	}
+	if len(elems) != 2 || elems[0] != "e1" || elems[1] != "e2" {
+		b.Fatalf("expected elems to be [\"e1\", \"e2\"], instead got %v", elems)
+	}
+}
+
+func BenchmarkJSONLazyValue(b *testing.B) {
+	// value at `g.g.f` we will be trying to read from the payload
+	const throughputChunkSize = 125
+
+	sizesToTest := []int{1, 10, 100, 500, 1000, 2500, 5000, 7500, 10000}
+
+	for _, bigMapSize := range sizesToTest {
+		b.Run(fmt.Sprintf("object size %d", bigMapSize), func(b *testing.B) {
+			m := map[string]any{
+				"a": nil,
+				"b": 3.14,
+				"c": true,
+				"d": "foo",
+				"e": map[string]any{"k": "v"},
+				"f": []any{"e1", "e2"},
+				"g": map[string]any{
+					"a": nil,
+					"b": 3.14,
+					"c": true,
+					"d": "foo",
+					"e": map[string]any{"k": "v"},
+					"f": []any{"e1", "e2"},
+					"g": map[string]any{
+						"a": nil,
+						"b": 3.14,
+						"c": true,
+						"d": "foo",
+						"e": map[string]any{"k": "v"},
+						"f": []any{"e1", "e2"},
+					},
+				},
+				"h": map[string]any{
+					"a": nil,
+					"b": 3.14,
+					"c": true,
+					"d": "foo",
+					"e": map[string]any{"k": "v"},
+					"f": []any{"e1", "e2"},
+					"g": map[string]any{
+						"a": nil,
+						"b": 3.14,
+						"c": true,
+						"d": "foo",
+						"e": map[string]any{"k": "v"},
+						"f": []any{"e1", "e2"},
+					},
+				},
+			}
+			bigMap := make(map[string]any, bigMapSize)
+			for range bigMapSize {
+				bigMap[rand.Text()] = rand.Text()
+			}
+			m["aa"] = bigMap
+			m["zz"] = bigMap
+			bsBig, err := json.Marshal(m)
+			requireNoError(b, err)
+
+			benchLazy := func(b *testing.B, bs []byte) {
+				lv := NewJSON(bs)
+				v, err := lv.Load()
+				requireNoError(b, err)
+				lvg := v.Map().Get("g")
+				vg, err := lvg.Load()
+				requireNoError(b, err)
+				lvgg := vg.Map().Get("g")
+				vgg, err := lvgg.Load()
+				requireNoError(b, err)
+				lvggf := vgg.Map().Get("f")
+				vggf, err := lvggf.Load()
+				requireNoError(b, err)
+				vggfSlice := vggf.Slice()
+				elems := make([]string, vggfSlice.Len())
+				for i, lve := range vggfSlice.All() {
+					ve, err := lve.Load()
+					requireNoError(b, err)
+					require.Equal(b, TypeString, ve.Type())
+					elems[i] = ve.String()
+				}
+				if len(elems) != 2 || elems[0] != "e1" || elems[1] != "e2" {
+					b.Fatalf("expected elems to be [\"e1\", \"e2\"], instead got %v", elems)
+				}
+			}
+
+			_ = benchLazy
+
+			benchFullUnmarshal := func(b *testing.B, bs []byte) {
+				var vAny any
+				requireNoError(b, json.Unmarshal(bs, &vAny))
+				v, ok := vAny.(map[string]any)
+				if !ok {
+					b.Fatal("not map")
+				}
+				vg, ok := v["g"].(map[string]any)
+				if !ok {
+					b.Fatal("not map2")
+				}
+				vgg, ok := vg["g"].(map[string]any)
+				if !ok {
+					b.Fatal("not map3")
+				}
+				vggf, ok := vgg["f"].([]any)
+				if !ok {
+					b.Fatal("not slice")
+				}
+				if len(vggf) != 2 {
+					b.Fatal("not length 2")
+				}
+				elems := make([]string, len(vggf))
+				elems[0], ok = vggf[0].(string)
+				if !ok {
+					b.Fatal("not string0")
+				}
+				elems[1], ok = vggf[1].(string)
+				if !ok {
+					b.Fatal("not string1")
+				}
+			}
+			_ = benchFullUnmarshal
+
+			benchmarkLatencyThroughput(b, "JSONLazyValue", throughputChunkSize, func(b *testing.B) {
+				benchLazy(b, bsBig)
+			})
+			benchmarkLatencyThroughput(b, "JSONUnmarshal", throughputChunkSize, func(b *testing.B) {
+				benchFullUnmarshal(b, bsBig)
+			})
+		})
+	}
+}
+
+func requireNoError(b testing.TB, err error) {
+	if err != nil {
+		b.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func benchmarkLatencyThroughput(b *testing.B, name string, throughputChunkSize int, benchFn func(b *testing.B)) {
+	b.ResetTimer()
+	b.Run(name+":latency", func(b *testing.B) {
+		for b.Loop() {
+			benchFn(b)
+		}
+	})
+
+	b.ResetTimer()
+	b.Run(fmt.Sprintf("%s:throughput(%d)", name, throughputChunkSize), func(b *testing.B) {
+		for b.Loop() {
+			var wg sync.WaitGroup
+			for range throughputChunkSize {
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					benchFn(b)
+				}()
+			}
+			wg.Wait()
+		}
+	})
 }

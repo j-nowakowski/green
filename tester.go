@@ -75,7 +75,7 @@ func assertEqualLazy(t *testing.T, expected any, actual any) {
 
 func assertEqualSlice(t *testing.T, expected []any, actualAny any) {
 	t.Helper()
-	actual, ok := actualAny.(Slice)
+	actual, ok := actualAny.(MemSlice)
 	require.True(t, ok, "expected Slice type, got %T", actualAny)
 	require.Len(t, actual, len(expected))
 	for i, v := range expected {
@@ -87,7 +87,7 @@ func assertEqualSlice(t *testing.T, expected []any, actualAny any) {
 
 func assertEqualLazySlice(t *testing.T, expected []any, actualAny any) {
 	t.Helper()
-	actual, ok := actualAny.(*LazySlice)
+	actual, ok := actualAny.(*ImmutableSlice)
 	require.True(t, ok, "expected Slice type, got %T", actualAny)
 	require.Equal(t, actual.Len(), len(expected))
 	for i, v := range expected {
@@ -99,7 +99,7 @@ func assertEqualLazySlice(t *testing.T, expected []any, actualAny any) {
 
 func assertEqualMap(t *testing.T, expected map[string]any, actualAny any) {
 	t.Helper()
-	actual, ok := actualAny.(Map)
+	actual, ok := actualAny.(MemMap)
 	require.True(t, ok, "expected Map type, got %T", actualAny)
 	require.Len(t, actual, len(expected))
 	for k, v := range expected {
@@ -113,7 +113,7 @@ func assertEqualMap(t *testing.T, expected map[string]any, actualAny any) {
 
 func assertEqualLazyMap(t *testing.T, expected map[string]any, actualAny any) {
 	t.Helper()
-	actual, ok := actualAny.(*LazyMap)
+	actual, ok := actualAny.(*ImmutableMap)
 	require.True(t, ok, "expected Map type, got %T", actualAny)
 	require.Equal(t, actual.Len(), len(expected))
 	for k, v := range expected {

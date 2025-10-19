@@ -1,14 +1,14 @@
 package lzval
 
+import "context"
+
 //go:generate mockery --name=Codec
 type (
-	// DecodeValue has concrete type bool, float64, string, Slice, Map, or is nil.
-	DecodeValue any
-	Slice       = []*LazyValue
-	Map         = map[string]*LazyValue
+	MemSlice = []*MemValue
+	MemMap   = map[string]*MemValue
 
 	Codec interface {
-		Encode(any) ([]byte, error)
-		Decode([]byte) (DecodeValue, error)
+		Encode(context.Context, any) ([]byte, error)
+		Decode(context.Context, []byte) (any, error)
 	}
 )
