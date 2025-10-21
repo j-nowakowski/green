@@ -14,72 +14,70 @@ import (
 )
 
 func TestLazyValue(t *testing.T) {
-	assertNilValue := func(t *testing.T, v *Value) {
+	assertNilValue := func(t *testing.T, v ImmutableValue) {
 		assert.Nil(t, v, "expected nil Value")
-		assert.Equal(t, TypeNonexistent, v.Type(), "expected Type() return TypeNonexistent, instead got %s", v.Type())
-		assert.Nil(t, v.Value(), "expected Get() return nil, instead got %v", v.Value())
 	}
 
 	t.Run("if nil, return nil Value", func(t *testing.T) {
-		var lv *MemValue
-		v, err := lv.Load()
+		var lv *ByteLoader
+		v, err := lv.Load(t.Context())
 		require.NoError(t, err)
 		assertNilValue(t, v)
 
-		vAny, err := lv.RecursiveLoad()
+		vAny, err := lv.RecursiveLoad(t.Context())
 		require.NoError(t, err)
 		assert.Nil(t, vAny)
 	})
 
 	t.Run("if empty Payload, return nil Value", func(t *testing.T) {
-		lv := &MemValue{Payload: []byte{}}
-		v, err := lv.Load()
+		lv := &ByteLoader{Payload: []byte{}}
+		v, err := lv.Load(t.Context())
 		require.NoError(t, err)
 		assertNilValue(t, v)
 
 		// assert that this result is cached
 		lv.Payload = []byte(`"foo"`)
-		v, err = lv.Load()
+		v, err = lv.Load(t.Context())
 		require.NoError(t, err)
 		assertNilValue(t, v)
 
-		lv = &MemValue{Payload: []byte{}}
-		vAny, err := lv.RecursiveLoad()
+		lv = &ByteLoader{Payload: []byte{}}
+		vAny, err := lv.RecursiveLoad(t.Context())
 		require.NoError(t, err)
 		assert.Nil(t, vAny)
 
-		lv = &MemValue{Payload: nil}
-		v, err = lv.Load()
+		lv = &ByteLoader{Payload: nil}
+		v, err = lv.Load(t.Context())
 		require.NoError(t, err)
 		assertNilValue(t, v)
-		vAny, err = lv.RecursiveLoad()
+		vAny, err = lv.RecursiveLoad(t.Context())
 		require.NoError(t, err)
 		assert.Nil(t, vAny)
 
 		// assert that this result is cached
 		lv.Payload = []byte(`"foo"`)
-		v, err = lv.Load()
+		v, err = lv.Load(t.Context())
 		require.NoError(t, err)
 		assertNilValue(t, v)
 
-		lv = &MemValue{Payload: nil}
-		vAny, err = lv.RecursiveLoad()
+		lv = &ByteLoader{Payload: nil}
+		vAny, err = lv.RecursiveLoad(t.Context())
 		require.NoError(t, err)
 		assert.Nil(t, vAny)
 	})
 
 	t.Run("if no Codec, return error", func(t *testing.T) {
-		lv := &MemValue{Payload: []byte(`"foo"`)}
-		_, err := lv.Load()
+		lv := &ByteLoader{Payload: []byte(`"foo"`)}
+		_, err := lv.Load(t.Context())
 		require.ErrorIs(t, err, errNoCodec)
 
 		// assert that this result is cached
 		lv.Codec = NewMockCodec(t)
-		_, err = lv.Load()
+		_, err = lv.Load(t.Context())
 		require.ErrorIs(t, err, errNoCodec)
 
-		lv = &MemValue{Payload: []byte(`"foo"`)}
-		_, err = lv.RecursiveLoad()
+		lv = &ByteLoader{Payload: []byte(`"foo"`)}
+		_, err = lv.RecursiveLoad(t.Context())
 		require.ErrorIs(t, err, errNoCodec)
 	})
 
@@ -88,22 +86,22 @@ func TestLazyValue(t *testing.T) {
 		b := []byte(`"foo"`)
 		myErr := errors.New("decode error")
 		codec.On("Decode", b).Return(nil, myErr)
-		lv := &MemValue{Payload: []byte(`"foo"`), Codec: codec}
-		_, err := lv.Load()
-		require.ErrorIs(t, err, myErr, "expected myErr from Load()")
+		lv := &ByteLoader{Payload: []byte(`"foo"`), Codec: codec}
+		_, err := lv.Load(t.Context())
+		require.ErrorIs(t, err, myErr, "expected myErr from Load(t.Context())")
 
 		// assert that this result is cached
 		codec2 := NewMockCodec(t)
 		myErr2 := errors.New("decode error2")
 		codec2.On("Decode", b).Return(nil, myErr2).Maybe() // should not be called anyway
 		lv.Codec = codec2
-		_, err = lv.Load()
-		require.ErrorIs(t, err, myErr, "expected myErr from Load()")
+		_, err = lv.Load(t.Context())
+		require.ErrorIs(t, err, myErr, "expected myErr from Load(t.Context())")
 
 		codec = NewMockCodec(t)
 		codec.On("Decode", b).Return(nil, myErr)
-		lv = &MemValue{Payload: []byte(`"foo"`), Codec: codec}
-		_, err = lv.RecursiveLoad()
+		lv = &ByteLoader{Payload: []byte(`"foo"`), Codec: codec}
+		_, err = lv.RecursiveLoad(t.Context())
 		assert.ErrorIs(t, err, myErr)
 	})
 
@@ -111,23 +109,21 @@ func TestLazyValue(t *testing.T) {
 		codec := NewMockCodec(t)
 		codec.On("Decode", []byte(`foo`)).Return(nil, nil)
 		codec.On("Decode", []byte(`foo2`)).Return(true, nil).Maybe() // should not be called anyway
-		lv := &MemValue{Payload: []byte(`foo`), Codec: codec}
-		v, err := lv.Load()
+		lv := &ByteLoader{Payload: []byte(`foo`), Codec: codec}
+		v, err := lv.Load(t.Context())
 		require.NoError(t, err)
-		assert.Equal(t, TypeNull, v.Type(), "expected Type() return TypeNull, instead got %s", v.Type())
-		assert.Nil(t, v.Value(), "expected Get() return nil, instead got %v", v.Value())
+		assert.Nil(t, v, "expected Get() return nil, instead got %v", v)
 
 		// assert that this result is cached
 		lv.Payload = []byte(`foo2`)
-		v, err = lv.Load()
+		v, err = lv.Load(t.Context())
 		require.NoError(t, err)
-		assert.Equal(t, TypeNull, v.Type(), "expected Type() return TypeNull, instead got %s", v.Type())
-		assert.Nil(t, v.Value(), "expected Get() return nil, instead got %v", v.Value())
+		assert.Nil(t, v, "expected Get() return nil, instead got %v", v)
 
 		codec = NewMockCodec(t)
 		codec.On("Decode", []byte(`foo`)).Return(nil, nil)
-		lv = &MemValue{Payload: []byte(`foo`), Codec: codec}
-		v2, err := lv.RecursiveLoad()
+		lv = &ByteLoader{Payload: []byte(`foo`), Codec: codec}
+		v2, err := lv.RecursiveLoad(t.Context())
 		require.NoError(t, err)
 		assert.Nil(t, v2)
 	})
@@ -136,25 +132,21 @@ func TestLazyValue(t *testing.T) {
 		codec := NewMockCodec(t)
 		codec.On("Decode", []byte(`foo`)).Return(true, nil)
 		codec.On("Decode", []byte(`foo2`)).Return(nil, nil).Maybe() // should not be called anyway
-		lv := &MemValue{Payload: []byte(`foo`), Codec: codec}
-		v, err := lv.Load()
+		lv := &ByteLoader{Payload: []byte(`foo`), Codec: codec}
+		v, err := lv.Load(t.Context())
 		require.NoError(t, err)
-		assert.Equal(t, TypeBoolean, v.Type(), "expected Type() return TypeBoolean, instead got %s", v.Type())
-		assert.Equal(t, true, v.Value(), "expected Get() return true, instead got %v", v.Value())
-		assert.Equal(t, true, v.Boolean(), "expected Boolean() return true, instead got %v", v.Boolean())
+		assert.Equal(t, true, v, "expected Get() return true, instead got %v", v)
 
 		// assert that this result is cached
 		lv.Payload = []byte(`foo2`)
-		v, err = lv.Load()
+		v, err = lv.Load(t.Context())
 		require.NoError(t, err)
-		assert.Equal(t, TypeBoolean, v.Type(), "expected Type() return TypeBoolean, instead got %s", v.Type())
-		assert.Equal(t, true, v.Value(), "expected Get() return true, instead got %v", v.Value())
-		assert.Equal(t, true, v.Boolean(), "expected Boolean() return true, instead got %v", v.Boolean())
+		assert.Equal(t, true, v, "expected Get() return true, instead got %v", v)
 
 		codec = NewMockCodec(t)
 		codec.On("Decode", []byte(`foo`)).Return(true, nil)
-		lv = &MemValue{Payload: []byte(`foo`), Codec: codec}
-		v2, err := lv.RecursiveLoad()
+		lv = &ByteLoader{Payload: []byte(`foo`), Codec: codec}
+		v2, err := lv.RecursiveLoad(t.Context())
 		require.NoError(t, err)
 		assert.Equal(t, true, v2)
 	})
@@ -163,25 +155,21 @@ func TestLazyValue(t *testing.T) {
 		codec := NewMockCodec(t)
 		codec.On("Decode", []byte(`foo`)).Return(float64(123.456), nil)
 		codec.On("Decode", []byte(`foo2`)).Return(float64(789.012), nil).Maybe() // should not be called anyway
-		lv := &MemValue{Payload: []byte(`foo`), Codec: codec}
-		v, err := lv.Load()
+		lv := &ByteLoader{Payload: []byte(`foo`), Codec: codec}
+		v, err := lv.Load(t.Context())
 		require.NoError(t, err)
-		assert.Equal(t, TypeNumber, v.Type(), "expected Type() return TypeNumber, instead got %s", v.Type())
-		assert.Equal(t, float64(123.456), v.Value(), "expected Get() return 123.456, instead got %v", v.Value())
-		assert.Equal(t, float64(123.456), v.Number(), "expected Number() return 123.456, instead got %v", v.Number())
+		assert.Equal(t, float64(123.456), v, "expected Get() return 123.456, instead got %v", v)
 
 		// assert that this result is cached
 		lv.Payload = []byte(`foo2`)
-		v, err = lv.Load()
+		v, err = lv.Load(t.Context())
 		require.NoError(t, err)
-		assert.Equal(t, TypeNumber, v.Type(), "expected Type() return TypeNumber, instead got %s", v.Type())
-		assert.Equal(t, float64(123.456), v.Value(), "expected Get() return 123.456, instead got %v", v.Value())
-		assert.Equal(t, float64(123.456), v.Number(), "expected Number() return 123.456, instead got %v", v.Number())
+		assert.Equal(t, float64(123.456), v, "expected Get() return 123.456, instead got %v", v)
 
 		codec = NewMockCodec(t)
 		codec.On("Decode", []byte(`foo`)).Return(123.456, nil)
-		lv = &MemValue{Payload: []byte(`foo`), Codec: codec}
-		v2, err := lv.RecursiveLoad()
+		lv = &ByteLoader{Payload: []byte(`foo`), Codec: codec}
+		v2, err := lv.RecursiveLoad(t.Context())
 		require.NoError(t, err)
 		assert.Equal(t, 123.456, v2)
 	})
@@ -190,121 +178,98 @@ func TestLazyValue(t *testing.T) {
 		codec := NewMockCodec(t)
 		codec.On("Decode", []byte(`foo`)).Return("bar", nil)
 		codec.On("Decode", []byte(`foo2`)).Return("bar2", nil).Maybe() // should not be called anyway
-		lv := &MemValue{Payload: []byte(`foo`), Codec: codec}
-		v, err := lv.Load()
+		lv := &ByteLoader{Payload: []byte(`foo`), Codec: codec}
+		v, err := lv.Load(t.Context())
 		require.NoError(t, err)
-		assert.Equal(t, TypeString, v.Type(), "expected Type() return TypeString, instead got %s", v.Type())
-		assert.Equal(t, "bar", v.Value(), "expected Get() return \"bar\", instead got %v", v.Value())
-		assert.Equal(t, "bar", v.String(), "expected String() return \"bar\", instead got %q", v.String())
+		assert.Equal(t, "bar", v, "expected Get() return \"bar\", instead got %v", v)
 
 		// assert that this result is cached
 		lv.Payload = []byte(`foo2`)
-		v, err = lv.Load()
+		v, err = lv.Load(t.Context())
 		require.NoError(t, err)
-		assert.Equal(t, TypeString, v.Type(), "expected Type() return TypeString, instead got %s", v.Type())
-		assert.Equal(t, "bar", v.Value(), "expected Get() return \"bar\", instead got %v", v.Value())
-		assert.Equal(t, "bar", v.String(), "expected String() return \"bar\", instead got %q", v.String())
+		assert.Equal(t, "bar", v, "expected Get() return \"bar\", instead got %v", v)
 
 		codec = NewMockCodec(t)
 		codec.On("Decode", []byte(`foo`)).Return("bar", nil)
-		lv = &MemValue{Payload: []byte(`foo`), Codec: codec}
-		v2, err := lv.RecursiveLoad()
+		lv = &ByteLoader{Payload: []byte(`foo`), Codec: codec}
+		v2, err := lv.RecursiveLoad(t.Context())
 		require.NoError(t, err)
 		assert.Equal(t, "bar", v2)
 	})
 
 	t.Run("happy path: decode slice", func(t *testing.T) {
 		codec := NewMockCodec(t)
-		a := []*MemValue{new(MemValue), new(MemValue)}
+		a := []*ByteLoader{new(ByteLoader), new(ByteLoader)}
 		assertEqual := func(t *testing.T, laAny any) {
 			t.Helper()
 			la, ok := laAny.(*ImmutableSlice)
-			require.True(t, ok, "expected LazyMap type, got %T", laAny)
+			require.True(t, ok, "expected ImmutableSlice type, got %T", laAny)
 			assert.Equal(t, 2, la.Len(), "expected object to have 2 elements, instead got %d", la.Len())
 			assert.Equal(t, a[0], la.At(0), "expected At(0) to return %v, instead got %v",
 				a[0], la.At(0))
 			assert.Equal(t, a[1], la.At(1), "expected At(1) to return %v, instead got %v",
 				a[1], la.At(1))
 		}
-		a2 := []*MemValue{new(MemValue)}
+		a2 := []*ByteLoader{new(ByteLoader)}
 		codec.On("Decode", []byte(`foo`)).Return(a, nil)
 		codec.On("Decode", []byte(`foo2`)).Return(a2, nil).Maybe() // should not be called anyway
-		lv := &MemValue{Payload: []byte(`foo`), Codec: codec}
-		v, err := lv.Load()
+		lv := &ByteLoader{Payload: []byte(`foo`), Codec: codec}
+		v, err := lv.Load(t.Context())
 		require.NoError(t, err)
-		assert.Equal(t, TypeSlice, v.Type(), "expected Type() return TypeSlice, instead got %s", v.Type())
-		assertEqual(t, v.Value())
-		assertEqual(t, v.Slice())
+		assertEqual(t, v)
 
 		// assert that this result is cached
 		lv.Payload = []byte(`foo2`)
-		v, err = lv.Load()
+		v, err = lv.Load(t.Context())
 		require.NoError(t, err)
-		assert.Equal(t, TypeSlice, v.Type(), "expected Type() return TypeSlice, instead got %s", v.Type())
-		assertEqual(t, v.Value())
-		assertEqual(t, v.Slice())
+		assertEqual(t, v)
 	})
 
 	t.Run("happy path: decode object", func(t *testing.T) {
 		codec := NewMockCodec(t)
-		m := map[string]*MemValue{"key1": new(MemValue), "key2": new(MemValue)}
+		m := map[string]*ByteLoader{"key1": new(ByteLoader), "key2": new(ByteLoader)}
 		assertEqual := func(t *testing.T, loAny any) {
 			t.Helper()
 			lo, ok := loAny.(*ImmutableMap)
-			require.True(t, ok, "expected LazyMap type, got %T", loAny)
+			require.True(t, ok, "expected ImmutableMap type, got %T", loAny)
 			assert.Equal(t, 2, lo.Len(), "expected object to have 2 keys, instead got %d", lo.Len())
-			assert.Equal(t, m["key1"], lo.Get("key1"), "expected Get(\"key1\") to return %v, instead got %v",
-				m["key1"], lo.Get("key1"))
-			assert.Equal(t, m["key2"], lo.Get("key2"), "expected Get(\"key2\") to return %v, instead got %v",
-				m["key2"], lo.Get("key2"))
+			got, ok := lo.Get("key1")
+			require.True(t, ok, "expected field key1 to exist in object")
+			assert.Equal(t, m["key1"], got, "expected Get(\"key1\") to return %v, instead got %v",
+				m["key1"], got)
+			got, ok = lo.Get("key2")
+			require.True(t, ok, "expected field key2 to exist in object")
+			assert.Equal(t, m["key2"], got, "expected Get(\"key2\") to return %v, instead got %v",
+				m["key2"], got)
 		}
-		m2 := map[string]*MemValue{"key3": new(MemValue)}
+		m2 := map[string]*ByteLoader{"key3": new(ByteLoader)}
 		codec.On("Decode", []byte(`foo`)).Return(m, nil)
 		codec.On("Decode", []byte(`foo2`)).Return(m2, nil).Maybe() // should not be called anyway
-		lv := &MemValue{Payload: []byte(`foo`), Codec: codec}
-		v, err := lv.Load()
+		lv := &ByteLoader{Payload: []byte(`foo`), Codec: codec}
+		v, err := lv.Load(t.Context())
 		require.NoError(t, err)
-		assert.Equal(t, TypeMap, v.Type(), "expected Type() return TypeMap, instead got %s", v.Type())
-		assertEqual(t, v.Value())
-		assertEqual(t, v.Map())
+		assertEqual(t, v)
 
 		// assert that this result is cached
 		lv.Payload = []byte(`foo2`)
-		v, err = lv.Load()
+		v, err = lv.Load(t.Context())
 		require.NoError(t, err)
-		assert.Equal(t, TypeMap, v.Type(), "expected Type() return TypeMap, instead got %s", v.Type())
-		assertEqual(t, v.Value())
-		assertEqual(t, v.Map())
-	})
-
-	t.Run("if nil, UnmarshalJSON errors", func(t *testing.T) {
-		var lv *MemValue
-		err := lv.UnmarshalJSON([]byte(`"foo"`))
-		require.Error(t, err)
-	})
-
-	t.Run("UnmarshalJSON happy path", func(t *testing.T) {
-		lv := &MemValue{}
-		err := lv.UnmarshalJSON([]byte(`"foo"`))
-		require.NoError(t, err)
-		assert.Equal(t, []byte(`"foo"`), lv.Payload, "expected Payload to be %q, instead got %q", `"foo"`, lv.Payload)
+		assertEqual(t, v)
 	})
 
 	t.Run("Load is concurrency safe", func(t *testing.T) {
 		codec := NewMockCodec(t)
 		n := 1000
 		codec.On("Decode", []byte(`"foo"`)).Return("foo", nil).Times(1)
-		lv := &MemValue{Payload: []byte(`"foo"`), Codec: codec}
+		lv := &ByteLoader{Payload: []byte(`"foo"`), Codec: codec}
 		var eg errgroup.Group
 		for range n {
 			eg.Go(func() error {
-				v, err := lv.Load()
+				v, err := lv.Load(t.Context())
 				if err != nil {
 					return err
 				}
-				assert.Equal(t, TypeString, v.Type(), "expected Type() return TypeString, instead got %s", v.Type())
-				assert.Equal(t, "foo", v.Value(), "expected Get() return \"foo\", instead got %v", v.Value())
-				assert.Equal(t, "foo", v.String(), "expected String() return \"foo\", instead got %q", v.String())
+				assert.Equal(t, "foo", v, "expected Get() return \"foo\", instead got %v", v)
 				return nil
 			})
 		}
@@ -312,46 +277,57 @@ func TestLazyValue(t *testing.T) {
 	})
 }
 
-func TestLazyMap(t *testing.T) {
+func TestImmutableMap(t *testing.T) {
 	t.Run("Get with non-empty map", func(t *testing.T) {
 		codec := NewMockCodec(t)
-		m := map[string]*MemValue{"key1": new(MemValue), "key2": new(MemValue)}
+		m := map[string]*ByteLoader{"key1": new(ByteLoader), "key2": new(ByteLoader)}
 		codec.On("Decode", []byte(`foo`)).Return(m, nil)
-		lz := &MemValue{Payload: []byte(`foo`), Codec: codec}
-		v, err := lz.Load()
+		lz := &ByteLoader{Payload: []byte(`foo`), Codec: codec}
+		v, err := lz.Load(t.Context())
 		require.NoError(t, err)
-		lo := v.Map()
+		lo, ok := v.(*ImmutableMap)
+		require.True(t, ok, "expected ImmutableMap type, got %T", v)
 		require.NotNil(t, lo)
 		assert.Equal(t, len(m), lo.Len(), "expected object to have %d keys, instead got %d", len(m), lo.Len())
-		assert.Equal(t, m["key1"], lo.Get("key1"), "expected Get(\"key1\") to return %v, instead got %v",
-			m["key1"], lo.Get("key1"))
-		assert.Equal(t, m["key2"], lo.Get("key2"), "expected Get(\"key2\") to return %v, instead got %v",
-			m["key2"], lo.Get("key2"))
-		assert.Nil(t, lo.Get("key3"), "expected Get(\"key3\") to return nil, instead got %v", lo.Get("key1"))
+		got, ok := lo.Get("key1")
+		require.True(t, ok, "expected field key1 to exist in object")
+		assert.Equal(t, m["key1"], got, "expected Get(\"key1\") to return %v, instead got %v",
+			m["key1"], got)
+		got, ok = lo.Get("key2")
+		require.True(t, ok, "expected field key2 to exist in object")
+		assert.Equal(t, m["key2"], got, "expected Get(\"key2\") to return %v, instead got %v",
+			m["key2"], got)
+		got, ok = lo.Get("key3")
+		require.True(t, ok, "expected field key3 to exist in object")
+		assert.Nil(t, got, "expected Get(\"key3\") to return nil, instead got %v", got)
 	})
 
 	t.Run("Get with nil map", func(t *testing.T) {
 		codec := NewMockCodec(t)
-		m := map[string]*MemValue(nil)
+		m := map[string]*ByteLoader(nil)
 		codec.On("Decode", []byte(`foo`)).Return(m, nil)
-		lz := &MemValue{Payload: []byte(`foo`), Codec: codec}
-		v, err := lz.Load()
+		lz := &ByteLoader{Payload: []byte(`foo`), Codec: codec}
+		v, err := lz.Load(t.Context())
 		require.NoError(t, err)
-		lo := v.Map()
+		lo, ok := v.(*ImmutableMap)
+		require.True(t, ok, "expected ImmutableMap type, got %T", v)
 		require.NotNil(t, lo)
 		assert.Equal(t, len(m), lo.Len(), "expected object to have %d keys, instead got %d", len(m), lo.Len())
-		assert.Nil(t, lo.Get("key1"), "expected Get(\"key1\") to return nil, instead got %v", lo.Get("key1"))
+		got, ok := lo.Get("key1")
+		require.True(t, ok, "expected key1 to exist")
+		assert.Nil(t, got, "expected Get(\"key1\") to return nil, instead got %v", got)
 	})
 
 	t.Run("if nil, Len returns 0", func(t *testing.T) {
 		var lv *ImmutableMap
-		assert.Equal(t, 0, lv.Len(), "expected Len() on nil LazyMap to return 0, instead got %d", lv.Len())
+		assert.Equal(t, 0, lv.Len(), "expected Len() on nil ImmutableMap to return 0, instead got %d", lv.Len())
 	})
 
 	t.Run("if nil, Get returns nil", func(t *testing.T) {
 		var lv *ImmutableMap
-		assert.Nil(t, lv.Get("foo"), "expected Get(\"foo\") on nil LazyMap to return nil, instead got %v",
-			lv.Get("foo"))
+		got, ok := lv.Get("foo")
+		assert.Nil(t, got, "expected Get(\"foo\") on nil ImmutableMap to return nil, instead got %v", got)
+		assert.False(t, ok, "expected Get(\"foo\") on nil ImmutableMap to return ok=false, instead got ok=%v", ok)
 	})
 
 	t.Run("RecursiveLoad", func(t *testing.T) {
@@ -366,17 +342,17 @@ func TestLazyMap(t *testing.T) {
 		b, err := json.Marshal(m)
 		require.NoError(t, err)
 
-		lv := NewJSON(b)
-		gotAny, err := lv.RecursiveLoad()
+		lv := NewJSONByteLoader(b)
+		gotAny, err := lv.RecursiveLoad(t.Context())
 		require.NoError(t, err)
 		assert.Equal(t, m, gotAny)
 
-		lv = NewJSON(b)
-		v, err := lv.Load()
+		lv = NewJSONByteLoader(b)
+		v, err := lv.Load(t.Context())
 		require.NoError(t, err)
-		require.Equal(t, TypeMap, lv.val.Type())
-		lm := v.Map()
-		gotM, err := lm.RecursiveLoad()
+		lm, ok := v.(*ImmutableMap)
+		require.True(t, ok, "expected ImmutableMap type, got %T", v)
+		gotM, err := lm.RecursiveLoad(t.Context())
 		require.NoError(t, err)
 		assert.Equal(t, m, gotM)
 	})
@@ -385,12 +361,13 @@ func TestLazyMap(t *testing.T) {
 func TestLazySlice(t *testing.T) {
 	t.Run("non-empty slice", func(t *testing.T) {
 		codec := NewMockCodec(t)
-		a := []*MemValue{new(MemValue), new(MemValue), new(MemValue)}
+		a := []*ByteLoader{new(ByteLoader), new(ByteLoader), new(ByteLoader)}
 		codec.On("Decode", []byte(`foo`)).Return(a, nil)
-		lz := &MemValue{Payload: []byte(`foo`), Codec: codec}
-		v, err := lz.Load()
+		lz := &ByteLoader{Payload: []byte(`foo`), Codec: codec}
+		v, err := lz.Load(t.Context())
 		require.NoError(t, err)
-		la := v.Slice()
+		la, ok := v.(*ImmutableSlice)
+		require.True(t, ok, "expected LazySlice type, got %T", v)
 		require.NotNil(t, la)
 		assert.Equal(t, len(a), la.Len(), "expected slice to have %d elements, instead got %d", len(a), la.Len())
 		assert.Equal(t, a[0], la.At(0), "expected At(0) to return %v, instead got %v",
@@ -435,12 +412,13 @@ func TestLazySlice(t *testing.T) {
 
 	t.Run("nil slice", func(t *testing.T) {
 		codec := NewMockCodec(t)
-		a := []*MemValue(nil)
+		a := []*ByteLoader(nil)
 		codec.On("Decode", []byte(`foo`)).Return(a, nil)
-		lz := &MemValue{Payload: []byte(`foo`), Codec: codec}
-		v, err := lz.Load()
+		lz := &ByteLoader{Payload: []byte(`foo`), Codec: codec}
+		v, err := lz.Load(t.Context())
 		require.NoError(t, err)
-		la := v.Slice()
+		la, ok := v.(*ImmutableSlice)
+		require.True(t, ok, "expected LazySlice type, got %T", v)
 		require.NotNil(t, la)
 		assert.Equal(t, len(a), la.Len(), "expected slice to have %d elements, instead got %d", len(a), la.Len())
 		assert.Panics(t, func() {
@@ -486,112 +464,23 @@ func TestLazySlice(t *testing.T) {
 		b, err := json.Marshal(s)
 		require.NoError(t, err)
 
-		lv := NewJSON(b)
-		gotAny, err := lv.RecursiveLoad()
+		lv := NewJSONByteLoader(b)
+		gotAny, err := lv.RecursiveLoad(t.Context())
 		require.NoError(t, err)
 		assert.Equal(t, s, gotAny)
 
-		lv = NewJSON(b)
-		v, err := lv.Load()
+		lv = NewJSONByteLoader(b)
+		v, err := lv.Load(t.Context())
 		require.NoError(t, err)
-		require.Equal(t, TypeSlice, lv.val.Type())
-		ls := v.Slice()
-		gotS, err := ls.RecursiveLoad()
+		ls, ok := v.(*ImmutableSlice)
+		require.True(t, ok, "expected LazySlice type, got %T", v)
+		gotS, err := ls.RecursiveLoad(t.Context())
 		require.NoError(t, err)
 		assert.Equal(t, s, gotS)
 	})
 }
 
-func BenchmarkValue(b *testing.B) {
-	/*
-		Benchmarking found that the current implementation is slightly superior
-		to an alternative implementation that uses a single `any` field
-		and type assertions.
-
-		BenchmarkValue/current_impl:latency-8         	247309478	         4.709 ns/op	       0 B/op	       0 allocs/op
-		BenchmarkValue/current_impl:throughput-8      	   16521	     72471 ns/op	   16040 B/op	     501 allocs/op
-		BenchmarkValue/alt_impl:latency-8             	215735378	         5.563 ns/op	       0 B/op	       0 allocs/op
-		BenchmarkValue/alt_impl:throughput-8          	   16556	     72743 ns/op	   16017 B/op	     501 allocs/op
-	*/
-	benchCurrent := func(b *testing.B) {
-		v := &Value{
-			t:         TypeString,
-			valString: "foo",
-		}
-		vs := v.String()
-		if vs != "foo" {
-			b.Fatal("expected String() to return 'foo', instead got", vs)
-		}
-		va := v.Value()
-		if va != "foo" {
-			b.Fatal("expected String() to return 'foo', instead got", vs)
-		}
-	}
-
-	benchAlt := func(b *testing.B) {
-		v := &altValue{
-			t:   TypeString,
-			val: "foo",
-		}
-		vs := v.String()
-		if vs != "foo" {
-			b.Fatal("expected String() to return 'foo', instead got", vs)
-		}
-		va := v.Value()
-		if va != "foo" {
-			b.Fatal("expected String() to return 'foo', instead got", vs)
-		}
-	}
-
-	throughputChunkSize := 1000
-	benchmarkLatencyThroughput(b, "current_impl", throughputChunkSize, benchCurrent)
-	benchmarkLatencyThroughput(b, "alt_impl", throughputChunkSize, benchAlt)
-}
-
-type altValue struct {
-	t   ValueType
-	val any
-}
-
-func (v *altValue) Value() DecodeValue {
-	if v == nil {
-		return nil
-	}
-	switch v.t {
-	case TypeNumber:
-		vv, _ := v.val.(float64)
-		return vv
-	case TypeBoolean:
-		vv, _ := v.val.(bool)
-		return vv
-	case TypeString:
-		vv, _ := v.val.(string)
-		return vv
-	case TypeMap:
-		vv, _ := v.val.(*ImmutableMap)
-		return vv
-	case TypeSlice:
-		vv, _ := v.val.(*ImmutableSlice)
-		return vv
-	default:
-		return nil
-	}
-}
-
-func (v *altValue) String() string {
-	if v == nil {
-		return ""
-	}
-	switch v.t {
-	case TypeString:
-		vv, _ := v.val.(string)
-		return vv
-	default:
-		return ""
-	}
-}
-
-func TestJSONLazyValueAdHoc(b *testing.T) {
+func TestJSONLazyValueAdHoc(t *testing.T) {
 	bigMapSize := 1000
 	m := map[string]any{
 		"a": nil,
@@ -640,30 +529,40 @@ func TestJSONLazyValueAdHoc(b *testing.T) {
 	m["aa"] = bigMap
 	m["zz"] = bigMap
 	bsBig, err := json.Marshal(m)
-	requireNoError(b, err)
+	requireNoError(t, err)
 
-	lv := NewJSON(bsBig)
-	v, err := lv.Load()
-	requireNoError(b, err)
-	lvg := v.Map().Get("g")
-	vg, err := lvg.Load()
-	requireNoError(b, err)
-	lvgg := vg.Map().Get("g")
-	vgg, err := lvgg.Load()
-	requireNoError(b, err)
-	lvggf := vgg.Map().Get("f")
-	vggf, err := lvggf.Load()
-	requireNoError(b, err)
-	vggfSlice := vggf.Slice()
+	lv := NewJSONByteLoader(bsBig)
+	v, err := lv.Load(t.Context())
+	requireNoError(t, err)
+	lvm, ok := v.(*ImmutableMap)
+	require.True(t, ok, "expected ImmutableMap type, got %T", v)
+	lvg, ok := lvm.Get("g")
+	require.True(t, ok, "expected field g to exist in object")
+	vg, err := lvg.Load(t.Context())
+	requireNoError(t, err)
+	lvgm, ok := vg.(*ImmutableMap)
+	require.True(t, ok, "expected ImmutableMap type, got %T", vg)
+	lvgg, ok := lvgm.Get("g")
+	require.True(t, ok, "expected field g to exist in object")
+	vgg, err := lvgg.Load(t.Context())
+	requireNoError(t, err)
+	vggm, ok := vgg.(*ImmutableMap)
+	require.True(t, ok, "expected ImmutableMap type, got %T", vgg)
+	lvggf, ok := vggm.Get("f")
+	require.True(t, ok, "expected field f to exist in object")
+	vggf, err := lvggf.Load(t.Context())
+	requireNoError(t, err)
+	vggfSlice, ok := vggf.(*ImmutableSlice)
+	require.True(t, ok, "expected LazySlice type, got %T", vggf)
 	elems := make([]string, vggfSlice.Len())
 	for i, lve := range vggfSlice.All() {
-		ve, err := lve.Load()
-		requireNoError(b, err)
-		require.Equal(b, TypeString, ve.Type())
-		elems[i] = ve.String()
+		ve, err := lve.Load(t.Context())
+		requireNoError(t, err)
+		elems[i], ok = ve.(string)
+		require.True(t, ok, "expected string type, got %T", ve)
 	}
 	if len(elems) != 2 || elems[0] != "e1" || elems[1] != "e2" {
-		b.Fatalf("expected elems to be [\"e1\", \"e2\"], instead got %v", elems)
+		t.Fatalf("expected elems to be [\"e1\", \"e2\"], instead got %v", elems)
 	}
 }
 
@@ -725,25 +624,35 @@ func BenchmarkJSONLazyValue(b *testing.B) {
 			requireNoError(b, err)
 
 			benchLazy := func(b *testing.B, bs []byte) {
-				lv := NewJSON(bs)
-				v, err := lv.Load()
+				lv := NewJSONByteLoader(bs)
+				v, err := lv.Load(b.Context())
 				requireNoError(b, err)
-				lvg := v.Map().Get("g")
-				vg, err := lvg.Load()
+				lvm, ok := v.(*ImmutableMap)
+				require.True(b, ok, "expected ImmutableMap type, got %T", v)
+				lvg, ok := lvm.Get("g")
+				require.True(b, ok, "expected field g to exist in object")
+				vg, err := lvg.Load(b.Context())
 				requireNoError(b, err)
-				lvgg := vg.Map().Get("g")
-				vgg, err := lvgg.Load()
+				lvgm, ok := vg.(*ImmutableMap)
+				require.True(b, ok, "expected ImmutableMap type, got %T", vg)
+				lvgg, ok := lvgm.Get("g")
+				require.True(b, ok, "expected field g to exist in object")
+				vgg, err := lvgg.Load(b.Context())
 				requireNoError(b, err)
-				lvggf := vgg.Map().Get("f")
-				vggf, err := lvggf.Load()
+				vggm, ok := vgg.(*ImmutableMap)
+				require.True(b, ok, "expected ImmutableMap type, got %T", vgg)
+				lvggf, ok := vggm.Get("f")
+				require.True(b, ok, "expected field f to exist in object")
+				vggf, err := lvggf.Load(b.Context())
 				requireNoError(b, err)
-				vggfSlice := vggf.Slice()
+				vggfSlice, ok := vggf.(*ImmutableSlice)
+				require.True(b, ok, "expected LazySlice type, got %T", vggf)
 				elems := make([]string, vggfSlice.Len())
 				for i, lve := range vggfSlice.All() {
-					ve, err := lve.Load()
+					ve, err := lve.Load(b.Context())
 					requireNoError(b, err)
-					require.Equal(b, TypeString, ve.Type())
-					elems[i] = ve.String()
+					elems[i], ok = ve.(string)
+					require.True(b, ok, "expected string type, got %T", ve)
 				}
 				if len(elems) != 2 || elems[0] != "e1" || elems[1] != "e2" {
 					b.Fatalf("expected elems to be [\"e1\", \"e2\"], instead got %v", elems)

@@ -11,15 +11,15 @@ type (
 	JSONCodec struct{}
 )
 
-// NewJSON prepares a LazyValue that will decode JSON data lazily.
-func NewJSON(b json.RawMessage) *MemValue {
-	return &MemValue{
+// NewJSONByteLoader prepares a LazyValue that will decode JSON data lazily.
+func NewJSONByteLoader(b json.RawMessage) *ByteLoader {
+	return &ByteLoader{
 		Payload: b,
 		Codec:   JSONCodec{},
 	}
 }
 
-func (JSONCodec) Decode(_ context.Context, b []byte) (any, error) {
+func (JSONCodec) Decode(_ context.Context, b []byte) (DecodeValue, error) {
 	b = bytes.TrimSpace(b)
 	switch {
 	case bytes.HasPrefix(b, []byte{'{'}):
@@ -40,12 +40,12 @@ func (JSONCodec) Encode(_ context.Context, v any) ([]byte, error) {
 	return json.Marshal(v)
 }
 
-func splitJSONArray(data []byte) (MemSlice, error) {
+func splitJSONArray(data []byte) (LoadableSlice, error) {
 	if !bytes.HasSuffix(data, []byte{']'}) {
 		return nil, errors.New("input is not a JSON array")
 	}
 
-	elems := MemSlice{}
+	elems := LoadableSlice{}
 	start := 1
 	depthSquare := 0
 	depthCurly := 0
@@ -85,24 +85,24 @@ func splitJSONArray(data []byte) (MemSlice, error) {
 			depthSquare--
 		case ',':
 			if depthSquare == 0 && depthCurly == 0 {
-				elems = append(elems, &MemValue{Payload: data[start:i], Codec: JSONCodec{}})
+				elems = append(elems, &ByteLoader{Payload: data[start:i], Codec: JSONCodec{}})
 				start = i + 1
 			}
 		}
 	}
 	if len(data)-1 > start {
-		elems = append(elems, &MemValue{Payload: data[start : len(data)-1], Codec: JSONCodec{}})
+		elems = append(elems, &ByteLoader{Payload: data[start : len(data)-1], Codec: JSONCodec{}})
 	}
 
 	return elems, nil
 }
 
-func splitJSONMap(data []byte) (MemMap, error) {
+func splitJSONMap(data []byte) (LoadableMap, error) {
 	if !bytes.HasSuffix(data, []byte{'}'}) {
 		return nil, errors.New("input is not a JSON object")
 	}
 
-	m := MemMap{}
+	m := LoadableMap{}
 	start := 1
 	depthSquare := 0
 	depthCurly := 0
@@ -160,7 +160,7 @@ func splitJSONMap(data []byte) (MemMap, error) {
 				if !afterColon {
 					return nil, errors.New("missing ':' in JSON object")
 				}
-				m[key] = &MemValue{Payload: data[start:i], Codec: JSONCodec{}}
+				m[key] = &ByteLoader{Payload: data[start:i], Codec: JSONCodec{}}
 				afterColon = false
 				start = i + 1
 			}
@@ -170,7 +170,7 @@ func splitJSONMap(data []byte) (MemMap, error) {
 		if !afterColon {
 			return nil, errors.New("missing ':' in JSON object")
 		}
-		m[key] = &MemValue{Payload: data[start : len(data)-1], Codec: JSONCodec{}}
+		m[key] = &ByteLoader{Payload: data[start : len(data)-1], Codec: JSONCodec{}}
 	}
 
 	return m, nil

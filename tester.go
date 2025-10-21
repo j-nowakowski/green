@@ -32,9 +32,9 @@ func TestCodec(t *testing.T, codec Codec) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			b, err := codec.Encode(tt.value)
+			b, err := codec.Encode(t.Context(), tt.value)
 			require.NoError(t, err)
-			v, err := codec.Decode(b)
+			v, err := codec.Decode(t.Context(), b)
 			require.NoError(t, err)
 			if tt.expectOverride != nil {
 				assertEqual(t, *tt.expectOverride, v)
@@ -75,13 +75,13 @@ func assertEqualLazy(t *testing.T, expected any, actual any) {
 
 func assertEqualSlice(t *testing.T, expected []any, actualAny any) {
 	t.Helper()
-	actual, ok := actualAny.(MemSlice)
+	actual, ok := actualAny.(LoadableSlice)
 	require.True(t, ok, "expected Slice type, got %T", actualAny)
 	require.Len(t, actual, len(expected))
 	for i, v := range expected {
-		val, err := actual[i].Load()
+		val, err := actual[i].Load(t.Context())
 		require.NoError(t, err)
-		assertEqualLazy(t, v, val.Value())
+		assertEqualLazy(t, v, val)
 	}
 }
 
@@ -91,23 +91,23 @@ func assertEqualLazySlice(t *testing.T, expected []any, actualAny any) {
 	require.True(t, ok, "expected Slice type, got %T", actualAny)
 	require.Equal(t, actual.Len(), len(expected))
 	for i, v := range expected {
-		val, err := actual.At(i).Load()
+		val, err := actual.At(i).Load(t.Context())
 		require.NoError(t, err)
-		assertEqualLazy(t, v, val.Value())
+		assertEqualLazy(t, v, val)
 	}
 }
 
 func assertEqualMap(t *testing.T, expected map[string]any, actualAny any) {
 	t.Helper()
-	actual, ok := actualAny.(MemMap)
+	actual, ok := actualAny.(LoadableMap)
 	require.True(t, ok, "expected Map type, got %T", actualAny)
 	require.Len(t, actual, len(expected))
 	for k, v := range expected {
 		field, ok := actual[k]
 		require.True(t, ok, "expected field %s to exist in object", k)
-		val, err := field.Load()
+		val, err := field.Load(t.Context())
 		require.NoError(t, err)
-		assertEqualLazy(t, v, val.Value())
+		assertEqualLazy(t, v, val)
 	}
 }
 
@@ -117,9 +117,11 @@ func assertEqualLazyMap(t *testing.T, expected map[string]any, actualAny any) {
 	require.True(t, ok, "expected Map type, got %T", actualAny)
 	require.Equal(t, actual.Len(), len(expected))
 	for k, v := range expected {
-		val, err := actual.Get(k).Load()
+		got, ok := actual.Get(k)
+		require.True(t, ok, "expected field %s to exist in object", k)
+		val, err := got.Load(t.Context())
 		require.NoError(t, err)
-		assertEqualLazy(t, v, val.Value())
+		assertEqualLazy(t, v, val)
 	}
 }
 

@@ -2,13 +2,14 @@ package lzval
 
 import "context"
 
-//go:generate mockery --name=Codec
+//go:generate mockery
 type (
-	MemSlice = []*MemValue
-	MemMap   = map[string]*MemValue
+	LoadableSlice = []ValueLoader
+	LoadableMap   = map[string]ValueLoader
+	DecodeValue   = any
 
 	Codec interface {
 		Encode(context.Context, any) ([]byte, error)
-		Decode(context.Context, []byte) (any, error)
+		Decode(context.Context, []byte) (DecodeValue, error)
 	}
 )
