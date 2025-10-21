@@ -4,9 +4,11 @@ import "context"
 
 //go:generate mockery
 type (
-	LoadableSlice = []ValueLoader
-	LoadableMap   = map[string]ValueLoader
-	DecodeValue   = any
+	ValueLoader        = Loadable[ImmutableValue]
+	MutableValueLoader = Loadable[Value]
+	LoadableSlice      = []ValueLoader
+	LoadableMap        = map[string]ValueLoader
+	DecodeValue        = any
 
 	Codec interface {
 		Encode(context.Context, any) ([]byte, error)

@@ -1,64 +1,53 @@
 package lzval
 
-import "sync"
+// type (
+// 	Map struct {
+// 		base     *ImmutableMap
+// 		m        map[string]MutableValueLoader
+// 		parent   reportable
+// 		dirty    bool
+// 		hydrated bool
+// 	}
 
-// import (
-// 	"context"
-// 	"iter"
-// 	"sync"
+// 	Slice struct {
+// 		base     *ImmutableSlice
+// 		s        []MutableValueLoader
+// 		parent   reportable
+// 		dirty    bool
+// 		hydrated bool
+// 	}
+
+// 	literalLoader struct {
+// 		loadable Loadable[any]
+// 		parent   reportable
+// 		once     sync.Once
+// 		mv       Value
+// 		err      error
+// 	}
+
+// 	immutableLiteralLoader struct {
+// 		loadable Loadable[any]
+// 		once     sync.Once
+// 		mv       ImmutableValue
+// 		err      error
+// 	}
+
+// 	alwaysLoader struct {
+// 		v any
+// 	}
+
+// 	reportable interface {
+// 		reportDirty()
+// 	}
+
+// 	mutableLoader struct {
+// 		parent   reportable
+// 		loadable Loadable[ImmutableValue]
+// 		once     sync.Once
+// 		v        Value
+// 		err      error
+// 	}
 // )
-
-type (
-	ValueSlice = []Value
-	ValueMap   = map[string]Value
-
-	Map struct {
-		base     *ImmutableMap
-		m        map[string]MutableValueLoader
-		parent   reportable
-		dirty    bool
-		hydrated bool
-	}
-
-	Slice struct {
-		base     *ImmutableSlice
-		s        []MutableValueLoader
-		parent   reportable
-		dirty    bool
-		hydrated bool
-	}
-
-	literalLoader struct {
-		loadable Loadable[any]
-		parent   reportable
-		once     sync.Once
-		mv       Value
-		err      error
-	}
-
-	immutableLiteralLoader struct {
-		loadable Loadable[any]
-		once     sync.Once
-		mv       ImmutableValue
-		err      error
-	}
-
-	alwaysLoader struct {
-		v any
-	}
-
-	reportable interface {
-		reportDirty()
-	}
-
-	mutableLoader struct {
-		parent   reportable
-		loadable Loadable[ImmutableValue]
-		once     sync.Once
-		v        Value
-		err      error
-	}
-)
 
 // func (s *Map) Get(key string) (MutableValueLoader, bool) {
 // 	s.hydrate()
@@ -126,22 +115,22 @@ type (
 // 	}
 
 // 	im := &ImmutableMap{
-// 		immutables: make(map[string]ValueLoader, len(s.m)),
+// 		m: make(map[string]ValueLoader, len(s.m)),
 // 	}
 // 	for k, v := range s.m {
 // 		switch v := v.(type) {
 // 		case *alwaysLoader:
-// 			im.immutables[k] = &immutableLiteralLoader{loadable: v}
+// 			im.m[k] = &immutableLiteralLoader{loadable: v}
 // 		case *literalLoader:
-// 			im.immutables[k] = &immutableLiteralLoader{loadable: v.loadable}
+// 			im.m[k] = &immutableLiteralLoader{loadable: v.loadable}
 // 		case *mutableLoader:
 // 			switch vv := v.v.(type) {
 // 			case *Map:
-// 				im.immutables[k] = &alwaysLoader{v: vv.Immutable()}
+// 				im.m[k] = &alwaysLoader{v: vv.Immutable()}
 // 			case *Slice:
-// 				im.immutables[k] = &alwaysLoader{v: vv.Immutable()}
+// 				im.m[k] = &alwaysLoader{v: vv.Immutable()}
 // 			default:
-// 				im.immutables[k] = v.loadable
+// 				im.m[k] = v.loadable
 // 			}
 // 		default:
 // 			panic("unreachable")
@@ -228,22 +217,22 @@ type (
 // 	}
 
 // 	im := &ImmutableSlice{
-// 		immutables: make([]ValueLoader, len(s.s)),
+// 		s: make([]ValueLoader, len(s.s)),
 // 	}
 // 	for i, v := range s.s {
 // 		switch v := v.(type) {
 // 		case *alwaysLoader:
-// 			im.immutables[i] = &immutableLiteralLoader{loadable: v}
+// 			im.s[i] = &immutableLiteralLoader{loadable: v}
 // 		case *literalLoader:
-// 			im.immutables[i] = &immutableLiteralLoader{loadable: v.loadable}
+// 			im.s[i] = &immutableLiteralLoader{loadable: v.loadable}
 // 		case *mutableLoader:
 // 			switch vv := v.v.(type) {
 // 			case *Map:
-// 				im.immutables[i] = &alwaysLoader{v: vv.Immutable()}
+// 				im.s[i] = &alwaysLoader{v: vv.Immutable()}
 // 			case *Slice:
-// 				im.immutables[i] = &alwaysLoader{v: vv.Immutable()}
+// 				im.s[i] = &alwaysLoader{v: vv.Immutable()}
 // 			default:
-// 				im.immutables[i] = v.loadable
+// 				im.s[i] = v.loadable
 // 			}
 // 		default:
 // 			panic("unreachable")
@@ -266,7 +255,7 @@ type (
 // 		return
 // 	}
 // 	s.m = make(map[string]MutableValueLoader, s.base.Len())
-// 	for k, v := range s.base.immutables {
+// 	for k, v := range s.base.m {
 // 		s.m[k] = &mutableLoader{
 // 			parent:   s,
 // 			loadable: v,
@@ -297,7 +286,7 @@ type (
 // 		return
 // 	}
 // 	s.s = make([]MutableValueLoader, s.base.Len())
-// 	for i, v := range s.base.immutables {
+// 	for i, v := range s.base.s {
 // 		s.s[i] = &mutableLoader{
 // 			parent:   s,
 // 			loadable: v,

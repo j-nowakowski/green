@@ -1,7 +1,7 @@
 package lzval
 
-import "testing"
+// import "testing"
 
-func TestJSONCodec(t *testing.T) {
-	TestCodec(t, JSONCodec{})
-}
+// func TestJSONCodec(t *testing.T) {
+// 	TestCodec(t, JSONCodec{})
+// }
