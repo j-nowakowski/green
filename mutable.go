@@ -9,51 +9,69 @@ import (
 
 type (
 	// Value has a concrete type which is either Map, Slice, or a literal Go
-	// type. Values are mutable.
+	// type, in contrast to ImmutableValue.
 	Value any
 
-	// Map represents an mutable map of key-value pairs.
+	// Map provides a mutable map of key-value pairs.
 	//
-	// The methods of mutableMap are NOT SAFE for concurrent use.
+	// The methods for Map are NOT SAFE for concurrent use.
 	Map struct {
-		base       *ImmutableMap
+		base *ImmutableMap
+		// overwrites are writes that override values in base.
 		overwrites map[string]any
-		deletions  map[string]struct{}
-		parent     reportable
-		// cloneParent tracks the parent of the original copy of the map when
-		// the map was created via Clone(). It is used to signal dirty state to
-		// the original parent when nested, shared data is mutated, but to avoid
-		// making such signals if the mutation is on the clone only.
+		// deletions are writes that remove values from base. As an invariant, a
+		// key cannot be present in both overwrites and deletions.
+		deletions map[string]struct{}
+		// parent is the parent container of this map, if any. It is used to
+		// signal dirty state to the parent when this map or a nested container
+		// is mutated.
+		parent reportable
+		// cloneParent tracks the parent container of the original copy of the
+		// map when the map was created via Clone(). It is used to signal dirty
+		// state to the original parent when nested, shared data is mutated, but
+		// to avoid making such signals if the mutation is on the clone only.
 		cloneParent reportable
-		dirty       bool
-		len         int
+		// dirty tracks whether this map or a nested container has been mutated
+		// since creation.
+		dirty bool
+		// len is tracked manually as the Map is mutated to provide O(1) Len()
+		// calls.
+		len int
 	}
 
-	// Slice represents an mutable slice of values.
+	// Slice provides a mutable slice of values.
 	//
-	// The methods of mutableSlice are NOT SAFE for concurrent use.
+	// The methods for Slice are NOT SAFE for concurrent use.
 	Slice struct {
-		base            *ImmutableSlice
-		overwrites      map[int]any
+		base *ImmutableSlice
+		// overwrites are writes that overrides values in base.
+		overwrites map[int]any
+		// overwriteOffset is the offset to apply to overwrite keys to map them
+		// to the base slice's indexes. This is used to support ReSlice/SubSlice
+		// which may have trimmed elements from the front of base.
 		overwriteOffset int
-		appends         []any
-		// prepends are inserted in reverse order
+		// appends are elements inserted at the end via Push.
+		appends []any
+		// prepends are elements inserted at the beginning via PushFront. To
+		// optimize for Go slices' native append functionality, this slice
+		// contains the front elements in reverse order.
 		prepends []any
-		parent   reportable
+		// parent is the parent container of this slice, if any. It is used to
+		// signal dirty state to the parent when this slice or a nested
+		// container is mutated.
+		parent reportable
 		// cloneParent tracks the parent of the original copy of the slice when
 		// the slice was created via Clone(). It is used to signal dirty state
 		// to the original parent when nested, shared data is mutated, but to
 		// avoid making such signals if the mutation is on the clone only.
 		cloneParent reportable
-		dirty       bool
-	}
-
-	reportable interface {
-		reportDirty()
+		// dirty tracks whether this slice or a nested container has been
+		// mutated since creation.
+		dirty bool
 	}
 )
 
-// ExportValue converts an Value into its native Go type. For Map and Slice
+// ExportValue converts a Value into its native Go type. For Map and Slice
 // types, this performs a deep copy of the entire structure.
 //
 // This has O(n) time complexity, where n is the total number of nodes in the
@@ -126,56 +144,11 @@ func EqualValues(a, b Value) bool {
 	}
 }
 
-func (m *Map) Set(key string, val any) {
-	if m == nil {
-		panic("*green.Map: assignment to entry in nil map")
-	}
-
-	keyExisted := m.Has(key)
-	m.addOverwrite(key, val)
-	m.reportDirty()
-	delete(m.deletions, key)
-	if !keyExisted {
-		m.len++
-	}
-}
-
-func (m *Map) Has(key string) bool {
-	if m == nil {
-		return false
-	}
-
-	if _, ok := m.overwrites[key]; ok {
-		return true
-	}
-	if _, ok := m.deletions[key]; ok {
-		return false
-	}
-	return m.base.Has(key)
-}
-
-func (m *Map) Delete(key string) {
-	if m == nil {
-		return
-	}
-
-	keyExisted := m.Has(key)
-	m.addDeletion(key)
-	m.reportDirty()
-	delete(m.overwrites, key)
-	if keyExisted {
-		m.len--
-	}
-}
-
-func (m *Map) Len() int {
-	if m == nil {
-		return 0
-	}
-
-	return m.len
-}
-
+// Get retrieves a Value for the value associated with the given key in the Map
+// and a boolean indicating whether a value for that key exists. If the Map is
+// nil, this always returns (nil, false).
+//
+// This has O(1) average time complexity.
 func (m *Map) Get(key string) (Value, bool) {
 	if m == nil {
 		return nil, false
@@ -199,6 +172,79 @@ func (m *Map) Get(key string) (Value, bool) {
 	return v, true
 }
 
+// Has returns whether the Map contains a value for the given key. If the Map is
+// nil, this always returns false.
+//
+// This has O(1) time complexity. It never triggers one-time shallow copies.
+func (m *Map) Has(key string) bool {
+	if m == nil {
+		return false
+	}
+
+	if _, ok := m.overwrites[key]; ok {
+		return true
+	}
+	if _, ok := m.deletions[key]; ok {
+		return false
+	}
+	return m.base.Has(key)
+}
+
+// Set sets the value for the given key in the Map. If the Map is nil, this
+// panics.
+//
+// This has O(1) average time complexity.
+func (m *Map) Set(key string, val any) {
+	if m == nil {
+		panic("*green.Map: assignment to entry in nil map")
+	}
+
+	keyExisted := m.Has(key)
+	m.addOverwrite(key, val)
+	delete(m.deletions, key)
+	if !keyExisted {
+		m.len++
+	}
+	m.reportDirty()
+}
+
+// Delete removes the value for the given key in the Map. If the Map is nil,
+// this is a no-op.
+//
+// This has O(1) average time complexity.
+func (m *Map) Delete(key string) {
+	if m == nil {
+		return
+	}
+
+	keyExisted := m.Has(key)
+	m.addDeletion(key)
+	delete(m.overwrites, key)
+	if keyExisted {
+		m.len--
+		m.reportDirty()
+	}
+}
+
+// Len returns the number of fields in the Map. If the Map is nil, it returns 0.
+//
+// This has O(1) time complexity.
+func (m *Map) Len() int {
+	if m == nil {
+		return 0
+	}
+
+	return m.len
+}
+
+// All iterates over all key, value pairs in the Map. Like iterating over a
+// native Go map, the order of pairs is non-deterministic. Unlike a native Go
+// map, the order of iteration is not from a uniform random distribution due to
+// how the underlying data is stored, so do not rely on this function for full
+// and secure randomization. This function yields nothing if the Map is nil.
+//
+// This has O(k') average time complexity, where k' is the number of key-value
+// pairs in the Map which get iterated over.
 func (m *Map) All() iter.Seq2[string, Value] {
 	return func(yield func(string, Value) bool) {
 		if m == nil {
@@ -225,6 +271,12 @@ func (m *Map) All() iter.Seq2[string, Value] {
 	}
 }
 
+// Immutable returns an immutable version of the Map. Subsequent mutations to
+// the Map do not affect the returned ImmutableMap. If the Map is nil, this
+// returns nil.
+//
+// This has O(k) time complexity, where k is the total number of dirty nodes in
+// the graph representing the underlying value.
 func (m *Map) Immutable() *ImmutableMap {
 	if m == nil {
 		return nil
@@ -256,6 +308,14 @@ func (m *Map) Immutable() *ImmutableMap {
 	return &ImmutableMap{base: im, len: len(im), copied: true}
 }
 
+// Clone returns a shallow copy of the Map. Subsequent mutations to the clone do
+// not affect the original Map, and vice versa. However, nested containers are
+// shared between the original and the clone, so mutations to nested containers
+// affect both. If the Map is nil, this returns nil.
+//
+// This has O(k+w+d) time complexity, where k is the number of key-value pairs
+// in the base map, w is the number of distinct keys Set on the Map, and d is
+// the number of distinct keys Deleted from the Map.
 func (m *Map) Clone() *Map {
 	if m == nil {
 		return nil
@@ -275,7 +335,7 @@ func (m *Map) Clone() *Map {
 	}
 }
 
-// Export returns a deep copy of the map, with all values converted to the
+// Export returns a deep copy of the Map, with all values converted to the
 // native Go types of the underlying values. Modifying this map does not affect
 // the Map, nor any values used as inputs, nor any values returned from future
 // calls to Export. If the Map is nil, this returns nil.
@@ -294,38 +354,10 @@ func (m *Map) Export() map[string]any {
 	return m2
 }
 
-func (s *Slice) Set(index int, val any) {
-	if index < 0 {
-		panic(fmt.Sprintf("*green.Slice.Set: index out of range [%d]", index))
-	}
-	if index >= s.Len() {
-		panic(fmt.Sprintf("*green.Slice.Set: index out of range [%d] with length %d", index, s.Len()))
-	}
-
-	s.reportDirty()
-
-	// in prepends?
-	if index < len(s.prepends) {
-		s.prepends[s.prependIndex(index)] = val
-		return
-	}
-	index -= len(s.prepends)
-
-	// in overwrites?
-	if index < s.base.Len() {
-		s.addOverwrite(index, val)
-		return
-	}
-
-	// in appends
-	index -= s.base.Len()
-	s.appends[index] = val
-}
-
-func (s *Slice) Len() int {
-	return len(s.prepends) + len(s.appends) + s.base.Len()
-}
-
+// At retrieves the Value at the specified index. Like a native Go slice, if the
+// index is out of bounds, this function panics.
+//
+// This has O(1) average time complexity.
 func (s *Slice) At(index int) Value {
 	if index < 0 {
 		panic(fmt.Sprintf("*green.Slice.At: index out of range [%d]", index))
@@ -373,6 +405,115 @@ func (s *Slice) At(index int) Value {
 	return v
 }
 
+// Set sets the value at the specified index in the Slice. Like a native Go
+// slice, if the index is out of bounds, this function panics.
+//
+// This has O(1) average time complexity.
+func (s *Slice) Set(index int, val any) {
+	if index < 0 {
+		panic(fmt.Sprintf("*green.Slice.Set: index out of range [%d]", index))
+	}
+	if index >= s.Len() {
+		panic(fmt.Sprintf("*green.Slice.Set: index out of range [%d] with length %d", index, s.Len()))
+	}
+
+	s.reportDirty()
+
+	// in prepends?
+	if index < len(s.prepends) {
+		s.prepends[s.prependIndex(index)] = val
+		return
+	}
+	index -= len(s.prepends)
+
+	// in overwrites?
+	if index < s.base.Len() {
+		s.addOverwrite(index, val)
+		return
+	}
+
+	// in appends
+	index -= s.base.Len()
+	s.appends[index] = val
+}
+
+// Len returns the number of elements in the Slice. If the Slice is nil, it
+// returns 0.
+//
+// This has O(1) time complexity.
+func (s *Slice) Len() int {
+	return len(s.prepends) + len(s.appends) + s.base.Len()
+}
+
+// Push appends the given value to the end of the Slice. Note that this has
+// in-place semantics, it does not return a new Slice like native Go slices'
+// append function. If the Slice is nil, this panics.
+//
+// This has O(1) average time complexity (the same complexity as Go's native
+// append function).
+func (s *Slice) Push(val any) {
+	if s == nil {
+		panic("*green.Slice.Push: push to nil slice")
+	}
+
+	s.appends = append(s.appends, val)
+	s.reportDirty()
+}
+
+// PushFront prepends the given value to the front of the Slice. Note that this
+// has in-place semantics; it does not return a new Slice. If the Slice is nil,
+// this panics.
+//
+// This has O(1) average time complexity (the same complexity as Go's native
+// append function).
+func (s *Slice) PushFront(val any) {
+	if s == nil {
+		panic("*green.Slice.PushFront: push-front to nil slice")
+	}
+
+	s.prepends = append(s.prepends, val)
+	s.reportDirty()
+}
+
+// ReSlice adjusts the bounds of the Slice to the given left index (inclusive)
+// and right index (exclusive). Note that this has in-slice semantics; it does
+// not return a new Slice. Like a native Go slice, if the indexes are out of
+// bounds, or if left > right, this function panics. No values are copied, so
+// existing references to containers within the before the ReSlice call are
+// still shared.
+//
+// This has O(k) average time complexity, where k is the number of elements in
+// the slice after reslicing.
+func (s *Slice) ReSlice(left, right int) {
+	s2 := s.subSlice(left, right, "ReSlice")
+	if s2 == s {
+		return
+	}
+	*s = *s2
+	s.reportDirty()
+}
+
+// SubSlice returns a new Slice representing the shallow subslice of the
+// original Slice from the given left index (inclusive) to the right index
+// (exclusive). Like a native Go slice, if the indexes are out of bounds, or if
+// left > right, this function panics. No values are copied, so existing
+// references to containers within the Slice are still shared with the SubSlice.
+//
+// This has O(k) average time complexity, where k is the number of elements in
+// the returned subslice.
+func (s *Slice) SubSlice(left, right int) *Slice {
+	return s.subSlice(left, right, "SubSlice")
+}
+
+// All iterates over all index, value pairs in the Slice in order. This function
+// yields nothing if the Slice is nil.
+//
+// This has O(k') average time complexity, where k' is the number of elements in
+// the Slice which get iterated over. If the Slice has not had its one-time
+// shallow copy performed yet, this performs it, costing O(k) work to shallow
+// copy the underlying slice, where k is the number of elements in that slice
+// (importantly, nested objects are not copied). This cost is amortized over
+// subsequent method calls.
 func (s *Slice) All() iter.Seq2[int, Value] {
 	return func(yield func(int, Value) bool) {
 		if s == nil {
@@ -412,23 +553,79 @@ func (s *Slice) All() iter.Seq2[int, Value] {
 	}
 }
 
-func (s *Slice) Push(val any) {
-	s.reportDirty()
-	s.appends = append(s.appends, val)
+// Immutable returns an immutable version of the Slice. Subsequent mutations to
+// the Slice do not affect the returned ImmutableSlice. If the Slice is nil,
+// this returns nil.
+//
+// This has O(k) time complexity, where k is the total number of dirty nodes in
+// the graph representing the underlying value.
+func (s *Slice) Immutable() *ImmutableSlice {
+	if s == nil {
+		return nil
+	}
+	if !s.dirty {
+		return s.base
+	}
+
+	is := make([]any, s.Len())
+	j := 0
+	addElement := func(v any) {
+		switch v := v.(type) {
+		case *Map:
+			is[j] = v.Immutable()
+		case *Slice:
+			is[j] = v.Immutable()
+		default:
+			is[j] = v
+		}
+		j++
+	}
+
+	// we don't call m.All() because that eagerly wraps as Values
+	for i := s.prependIndex(0); i >= 0; i-- {
+		v := s.prepends[i]
+		addElement(v)
+	}
+	for i, v := range s.base.All() {
+		if v2, ok := s.getOverride(i); ok {
+			v = v2
+		}
+		addElement(v)
+	}
+	for _, v := range s.appends {
+		addElement(v)
+	}
+
+	return &ImmutableSlice{base: is, len: len(is), copied: true}
 }
 
-func (s *Slice) PushFront(val any) {
-	s.reportDirty()
-	s.prepends = append(s.prepends, val)
-}
+// Clone returns a shallow copy of the Slice. Subsequent mutations to the clone
+// do not affect the original Slice, and vice versa. However, nested containers
+// are shared between the original and the clone, so mutations to nested
+// containers affect both. If the Slice is nil, this returns nil.
+//
+// This has O(k) time complexity, where k is the number of elements in the
+// Slice. This triggers the one-time shallow copy of the base slice if it has
+// not already been performed.
+func (s *Slice) Clone() *Slice {
+	if s == nil {
+		return nil
+	}
 
-func (s *Slice) ReSlice(l, r int) {
-	s2 := s.subSlice(l, r, "ReSlice")
-	*s = *s2
-}
+	for range s.All() {
+		// force wrapping of immediately nested values
+	}
 
-func (s *Slice) SubSlice(l, r int) *Slice {
-	return s.subSlice(l, r, "SubSlice")
+	return &Slice{
+		base:            s.base,
+		overwrites:      maps.Clone(s.overwrites),
+		overwriteOffset: s.overwriteOffset,
+		appends:         slices.Clone(s.appends),
+		prepends:        slices.Clone(s.prepends),
+		parent:          s.parent,
+		cloneParent:     s.cloneParent,
+		dirty:           s.dirty,
+	}
 }
 
 // Export returns a deep copy of the slice, with all values converted to the
@@ -448,6 +645,98 @@ func (s *Slice) Export() []any {
 		s2[i] = ExportValue(v)
 	}
 	return s2
+}
+
+type (
+	// reportable is an interface which mutable containers must implement. It is
+	// used to signal dirty state to parent containers.
+	reportable interface {
+		reportDirty()
+	}
+)
+
+func handleBaseValue(v any, parent reportable) (any, bool) {
+	switch v := v.(type) {
+	case *ImmutableMap:
+		v2 := v.Mutable()
+		v2.parent = parent
+		v2.cloneParent = parent
+		return v2, true
+	case *ImmutableSlice:
+		v2 := v.Mutable()
+		v2.parent = parent
+		v2.cloneParent = parent
+		return v2, true
+	case map[string]any:
+		v2 := NewImmutableMap(v).Mutable()
+		v2.parent = parent
+		v2.cloneParent = parent
+		return v2, true
+	case []any:
+		v2 := NewImmutableSlice(v).Mutable()
+		v2.parent = parent
+		v2.cloneParent = parent
+		return v2, true
+	default:
+		return v, false
+	}
+}
+
+func (m *Map) handleBaseValue(k string, v any) any {
+	v, ok := handleBaseValue(v, m)
+	if ok {
+		m.addOverwrite(k, v)
+	}
+	return v
+}
+
+func (m *Map) reportDirty() {
+	if !m.dirty {
+		m.dirty = true
+		if m.parent != nil {
+			m.parent.reportDirty()
+		}
+		if m.cloneParent != nil {
+			m.cloneParent.reportDirty()
+		}
+	}
+}
+
+func (m *Map) addOverwrite(k string, v any) {
+	if m.overwrites == nil {
+		m.overwrites = make(map[string]any)
+	}
+	m.overwrites[k] = v
+}
+
+func (m *Map) addDeletion(k string) {
+	if m.deletions == nil {
+		m.deletions = make(map[string]struct{})
+	}
+	m.deletions[k] = struct{}{}
+}
+
+func (s *Slice) reportDirty() {
+	if !s.dirty {
+		s.dirty = true
+		if s.parent != nil {
+			s.parent.reportDirty()
+		}
+		if s.cloneParent != nil {
+			s.cloneParent.reportDirty()
+		}
+	}
+}
+
+func (s *Slice) addOverwrite(i int, v any) {
+	if s.overwrites == nil {
+		s.overwrites = make(map[int]any)
+	}
+	s.overwrites[i+s.overwriteOffset] = v
+}
+
+func (s *Slice) prependIndex(i int) int {
+	return len(s.prepends) - 1 - i
 }
 
 func (s *Slice) subSlice(l, r int, funcName string) *Slice {
@@ -547,152 +836,7 @@ func (s *Slice) subSlice(l, r int, funcName string) *Slice {
 	}
 }
 
-func (s *Slice) Clone() *Slice {
-	if s == nil {
-		return nil
-	}
-
-	for range s.All() {
-		// force wrapping of immediately nested values
-	}
-
-	return &Slice{
-		base:            s.base,
-		overwrites:      maps.Clone(s.overwrites),
-		overwriteOffset: s.overwriteOffset,
-		appends:         slices.Clone(s.appends),
-		prepends:        slices.Clone(s.prepends),
-		parent:          s.parent,
-		cloneParent:     s.cloneParent,
-		dirty:           s.dirty,
-	}
-}
-
-func (s *Slice) Immutable() *ImmutableSlice {
-	if s == nil {
-		return nil
-	}
-	if !s.dirty {
-		return s.base
-	}
-
-	is := make([]any, s.Len())
-	j := 0
-	addElement := func(v any) {
-		switch v := v.(type) {
-		case *Map:
-			is[j] = v.Immutable()
-		case *Slice:
-			is[j] = v.Immutable()
-		default:
-			is[j] = v
-		}
-		j++
-	}
-
-	// we don't call m.All() because that eagerly wraps as Values
-	for i := s.prependIndex(0); i >= 0; i-- {
-		v := s.prepends[i]
-		addElement(v)
-	}
-	for i, v := range s.base.All() {
-		if v2, ok := s.getOverride(i); ok {
-			v = v2
-		}
-		addElement(v)
-	}
-	for _, v := range s.appends {
-		addElement(v)
-	}
-
-	return &ImmutableSlice{base: is, len: len(is), copied: true}
-}
-
 func (s *Slice) getOverride(i int) (any, bool) {
 	v, ok := s.overwrites[i+s.overwriteOffset]
 	return v, ok
-}
-
-func handleBaseValue(v any, parent reportable) (any, bool) {
-	switch v := v.(type) {
-	case *ImmutableMap:
-		v2 := v.Mutable()
-		v2.parent = parent
-		v2.cloneParent = parent
-		return v2, true
-	case *ImmutableSlice:
-		v2 := v.Mutable()
-		v2.parent = parent
-		v2.cloneParent = parent
-		return v2, true
-	case map[string]any:
-		v2 := NewImmutableMap(v).Mutable()
-		v2.parent = parent
-		v2.cloneParent = parent
-		return v2, true
-	case []any:
-		v2 := NewImmutableSlice(v).Mutable()
-		v2.parent = parent
-		v2.cloneParent = parent
-		return v2, true
-	default:
-		return v, false
-	}
-}
-
-func (m *Map) handleBaseValue(k string, v any) any {
-	v, ok := handleBaseValue(v, m)
-	if ok {
-		m.addOverwrite(k, v)
-	}
-	return v
-}
-
-func (m *Map) reportDirty() {
-	if !m.dirty {
-		m.dirty = true
-		if m.parent != nil {
-			m.parent.reportDirty()
-		}
-		if m.cloneParent != nil {
-			m.cloneParent.reportDirty()
-		}
-	}
-}
-
-func (m *Map) addOverwrite(k string, v any) {
-	if m.overwrites == nil {
-		m.overwrites = make(map[string]any)
-	}
-	m.overwrites[k] = v
-}
-
-func (m *Map) addDeletion(k string) {
-	if m.deletions == nil {
-		m.deletions = make(map[string]struct{})
-	}
-	m.deletions[k] = struct{}{}
-}
-
-func (s *Slice) reportDirty() {
-	if !s.dirty {
-		s.dirty = true
-		if s.parent != nil {
-			s.parent.reportDirty()
-		}
-		if s.cloneParent != nil {
-			s.cloneParent.reportDirty()
-		}
-	}
-}
-
-func (s *Slice) addOverwrite(i int, v any) {
-	if s.overwrites == nil {
-		s.overwrites = make(map[int]any)
-	}
-	s.overwrites[i+s.overwriteOffset] = v
-}
-
-func (s *Slice) prependIndex(i int) int {
-	return len(s.prepends) - 1 - i
 }

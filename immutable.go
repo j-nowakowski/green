@@ -16,14 +16,16 @@ import (
 	- Optimizations which avoid unnecessary wrapping and then unwrapping
 	  Immutable/Mutables
 	- Concurrency safety
+	- Create a common function for both immutable and mutable comparisons
 */
 
 type (
 	// ImmutableValue has a concrete type is either ImmutableMap,
-	// ImmutableSlice, or a literal Go type.
+	// ImmutableSlice, or a literal Go type, in contrast to Value, which
+	// contains mutable Map and Slice types.
 	ImmutableValue any
 
-	// ImmutableMap represents an immutable map of key-value pairs.
+	// ImmutableMap provides an immutable map of key-value pairs.
 	//
 	// The methods of ImmutableMap are NOT SAFE for concurrent use. This is a
 	// planned future enhancement.
@@ -33,9 +35,9 @@ type (
 		len    int // to avoid needing lock on Len() (lock not currently implemented)
 	}
 
-	// ImmutableSlice represents a slice of values.
+	// ImmutableSlice provides a slice of values.
 	//
-	// The methods of ImmutableMap are NOT SAFE for concurrent use. This is a
+	// The methods of ImmutableSlice are NOT SAFE for concurrent use. This is a
 	// planned future enhancement.
 	ImmutableSlice struct {
 		base   []any
@@ -144,10 +146,10 @@ func EqualImmutableValues(a, b ImmutableValue) bool {
 // exists. If the ImmutableMap is nil, this always returns (nil, false).
 //
 // This has O(1) average time complexity. The first time any container object is
-// fetched (and we have to convert it to an Immutable object), this function
+// fetched (and we have to convert it to an immutable object), this function
 // performs O(k) work to shallow copy the underlying map, where k is the number
 // of key-value pairs in that map (importantly, nested objects are not copied).
-// This cost is amortized over future calls to Get, All, SubSlice, and Export.
+// This cost is amortized over subsequent method calls.
 func (m *ImmutableMap) Get(key string) (ImmutableValue, bool) {
 	if m == nil {
 		return nil, false
@@ -187,12 +189,14 @@ func (m *ImmutableMap) Len() int {
 
 // All iterates over all key, value pairs in the ImmutableMap. Like iterating
 // over a native Go map, the order of pairs is non-deterministic. This function
-// returns and yields nothing if the ImmutableMap is nil.
+// yields nothing if the ImmutableMap is nil.
 //
 // This has O(k') average time complexity, where k' is the number of key-value
-// pairs in the map which get iterated over. Similar to Get, the first time this
-// iterates over a container object, a one-time shallow copy is performed which
-// takes O(k) time, where k is the total number of key-value pairs in that map.
+// pairs in the map which get iterated over. If the ImmutableMap has not had its
+// one-time shallow copy performed yet, this performs it, costing O(k) work to
+// shallow copy the underlying map, where k is the number of key-value pairs in
+// that map (importantly, nested objects are not copied). This cost is amortized
+// over subsequent method calls.
 func (m *ImmutableMap) All() iter.Seq2[string, ImmutableValue] {
 	return func(yield func(string, ImmutableValue) bool) {
 		if m == nil {
@@ -208,7 +212,9 @@ func (m *ImmutableMap) All() iter.Seq2[string, ImmutableValue] {
 	}
 }
 
-// Mutable returns a mutable version of the ImmutableSlice.
+// Mutable returns a mutable version of the ImmutableSlice. Subsequent mutations
+// to the returned Map do not affect the ImmutableMap. If the ImmutableMap is
+// nil, this returns nil.
 //
 // This has O(1) time complexity.
 func (m *ImmutableMap) Mutable() *Map {
@@ -238,14 +244,14 @@ func (m *ImmutableMap) Export() map[string]any {
 	return m2
 }
 
-// At retrieves the ImmutableValue for the value at the specified index. Like a
+// At retrieves the ImmutableValue at the specified index. Like a
 // native Go slice, if the index is out of bounds, this function panics.
 //
 // This has O(1) average time complexity. The first time any container object is
-// fetched (and we have to convert it to an Immutable object), this function
+// fetched (and we have to convert it to an immutable object), this function
 // performs O(k) work to shallow copy the underlying slice, where k is the
 // number of elements in that slice (importantly, nested objects are not
-// copied). This cost is amortized over future calls to At, All, and Export.
+// copied). This cost is amortized over subsequent method calls.
 func (s *ImmutableSlice) At(index int) ImmutableValue {
 	if index < 0 {
 		panic(fmt.Sprintf("*green.ImmutableSlice.At: index out of range [%d]", index))
