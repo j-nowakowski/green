@@ -8,9 +8,8 @@ import (
 )
 
 type (
-	// Value has a concrete type which is either
-	// Map, Slice, or a literal Go type. Values are
-	// mutable.
+	// Value has a concrete type which is either Map, Slice, or a literal Go
+	// type. Values are mutable.
 	Value any
 
 	// Map represents an mutable map of key-value pairs.
@@ -21,12 +20,10 @@ type (
 		overwrites map[string]any
 		deletions  map[string]struct{}
 		parent     reportable
-		// cloneParent tracks the parent of the original copy
-		// of the map when the map was created via Clone().
-		// It is used to signal dirty state to the original
-		// parent when nested, shared data is mutated, but to
-		// avoid making such signals if the mutation is on the
-		// clone only.
+		// cloneParent tracks the parent of the original copy of the map when
+		// the map was created via Clone(). It is used to signal dirty state to
+		// the original parent when nested, shared data is mutated, but to avoid
+		// making such signals if the mutation is on the clone only.
 		cloneParent reportable
 		dirty       bool
 		len         int
@@ -43,12 +40,10 @@ type (
 		// prepends are inserted in reverse order
 		prepends []any
 		parent   reportable
-		// cloneParent tracks the parent of the original copy
-		// of the slice when the slice was created via Clone().
-		// It is used to signal dirty state to the original
-		// parent when nested, shared data is mutated, but to
-		// avoid making such signals if the mutation is on the
-		// clone only.
+		// cloneParent tracks the parent of the original copy of the slice when
+		// the slice was created via Clone(). It is used to signal dirty state
+		// to the original parent when nested, shared data is mutated, but to
+		// avoid making such signals if the mutation is on the clone only.
 		cloneParent reportable
 		dirty       bool
 	}
@@ -58,12 +53,11 @@ type (
 	}
 )
 
-// ExportValue converts an Value into its native Go type.
-// For Map and Slice types, this performs a deep copy
-// of the entire structure.
+// ExportValue converts an Value into its native Go type. For Map and Slice
+// types, this performs a deep copy of the entire structure.
 //
-// This has O(n) time complexity, where n is the total number of nodes
-// in the graph representing the underlying value.
+// This has O(n) time complexity, where n is the total number of nodes in the
+// graph representing the underlying value.
 func ExportValue(v Value) any {
 	switch v := v.(type) {
 	case *Map:
@@ -75,12 +69,11 @@ func ExportValue(v Value) any {
 	}
 }
 
-// EqualValues compares two Values for deep equality.
-// It returns true if they are deeply equal, false otherwise.
-// It optimizes for the cases where both values (or nested values) are the
-// same Map or Slice instance, checked by pointer equality.
-// Even if two values are different instances, they are still considered
-// equal if their contents are deeply equal.
+// EqualValues compares two Values for deep equality. It returns true if they
+// are deeply equal, false otherwise. It optimizes for the cases where both
+// values (or nested values) are the same Map or Slice instance, checked by
+// pointer equality. Even if two values are different instances, they are still
+// considered equal if their contents are deeply equal.
 //
 // This has O(n) time complexity, where n is the total number of nodes among
 // both a and b in the graph representing their underlying values. In practice,
@@ -282,14 +275,13 @@ func (m *Map) Clone() *Map {
 	}
 }
 
-// Export returns a deep copy of the map, with all values converted to
-// the native Go types of the underlying values. Modifying this map
-// does not affect the Map, nor any values used as inputs,
-// nor any values returned from future calls to Export. If the Map
-// is nil, this returns nil.
+// Export returns a deep copy of the map, with all values converted to the
+// native Go types of the underlying values. Modifying this map does not affect
+// the Map, nor any values used as inputs, nor any values returned from future
+// calls to Export. If the Map is nil, this returns nil.
 //
-// This has O(n) time complexity, where n is the total number of nodes
-// in the graph representing the underlying value.
+// This has O(n) time complexity, where n is the total number of nodes in the
+// graph representing the underlying value.
 func (m *Map) Export() map[string]any {
 	if m == nil {
 		return nil
@@ -439,14 +431,13 @@ func (s *Slice) SubSlice(l, r int) *Slice {
 	return s.subSlice(l, r, "SubSlice")
 }
 
-// Export returns a deep copy of the slice, with all values converted to
-// the native Go types of the underlying values. Modifying this slice
-// does not affect the Slice, nor any values used as inputs,
-// nor any values returned from future calls to Export. If the Slice
-// is nil, this returns nil.
+// Export returns a deep copy of the slice, with all values converted to the
+// native Go types of the underlying values. Modifying this slice does not
+// affect the Slice, nor any values used as inputs, nor any values returned from
+// future calls to Export. If the Slice is nil, this returns nil.
 //
-// This has O(n) time complexity, where n is the total number of nodes
-// in the graph representing the underlying value.
+// This has O(n) time complexity, where n is the total number of nodes in the
+// graph representing the underlying value.
 func (s *Slice) Export() []any {
 	if s == nil {
 		return nil
@@ -510,7 +501,8 @@ func (s *Slice) subSlice(l, r int, funcName string) *Slice {
 		lToTrim -= lBaseToTrim
 		rToTrim -= rBaseToTrim
 
-		// adjust prepends/appends if we overflow from base (only 1 branch can be true)
+		// adjust prepends/appends if we overflow from base (only 1 branch can
+		// be true)
 		if lToTrim > 0 {
 			newAppends = newAppends[lToTrim:]
 		} else if rToTrim > 0 {
