@@ -9,7 +9,6 @@ import (
 
 /*
 	To-do items:
-	- Add custom panics
 	- Instead of one-time shallow copy, consider
 	  using a map which tracks overwrites. This was
 	  the original design but it got too confusing handling
