@@ -145,11 +145,7 @@ func EqualImmutableValues(a, b ImmutableValue) bool {
 // in the ImmutableMap and a boolean indicating whether a value for that key
 // exists. If the ImmutableMap is nil, this always returns (nil, false).
 //
-// This has O(1) average time complexity. The first time any container object is
-// fetched (and we have to convert it to an immutable object), this function
-// performs O(k) work to shallow copy the underlying map, where k is the number
-// of key-value pairs in that map (importantly, nested objects are not copied).
-// This cost is amortized over subsequent method calls.
+// This has O(1) average time complexity.
 func (m *ImmutableMap) Get(key string) (ImmutableValue, bool) {
 	if m == nil {
 		return nil, false
@@ -165,7 +161,7 @@ func (m *ImmutableMap) Get(key string) (ImmutableValue, bool) {
 // Has returns whether the ImmutableMap contains a value for the given key. If
 // the ImmutableMap is nil, this always returns false.
 //
-// This has O(1) time complexity. It never triggers one-time shallow copies.
+// This has O(1) time complexity.
 func (m *ImmutableMap) Has(key string) bool {
 	if m == nil {
 		return false
@@ -192,11 +188,7 @@ func (m *ImmutableMap) Len() int {
 // yields nothing if the ImmutableMap is nil.
 //
 // This has O(k') average time complexity, where k' is the number of key-value
-// pairs in the map which get iterated over. If the ImmutableMap has not had its
-// one-time shallow copy performed yet, this performs it, costing O(k) work to
-// shallow copy the underlying map, where k is the number of key-value pairs in
-// that map (importantly, nested objects are not copied). This cost is amortized
-// over subsequent method calls.
+// pairs in the map which get iterated over.
 func (m *ImmutableMap) All() iter.Seq2[string, ImmutableValue] {
 	return func(yield func(string, ImmutableValue) bool) {
 		if m == nil {
@@ -244,14 +236,10 @@ func (m *ImmutableMap) Export() map[string]any {
 	return m2
 }
 
-// At retrieves the ImmutableValue at the specified index. Like a
-// native Go slice, if the index is out of bounds, this function panics.
+// At retrieves the ImmutableValue at the specified index. Like a native Go
+// slice, if the index is out of bounds, this function panics.
 //
-// This has O(1) average time complexity. The first time any container object is
-// fetched (and we have to convert it to an immutable object), this function
-// performs O(k) work to shallow copy the underlying slice, where k is the
-// number of elements in that slice (importantly, nested objects are not
-// copied). This cost is amortized over subsequent method calls.
+// This has O(1) average time complexity.
 func (s *ImmutableSlice) At(index int) ImmutableValue {
 	if index < 0 {
 		panic(fmt.Sprintf("*green.ImmutableSlice.At: index out of range [%d]", index))
@@ -275,34 +263,33 @@ func (s *ImmutableSlice) Len() int {
 	return s.len
 }
 
-// SubSlice returns a new ImmutableSlice that is a subslice of the receiver
-// ImmutableSlice, equivalent to calling `mySlice[l:r]`. Like a native Go slice,
-// if an index is out of bounds, this function panics.
+// SubSlice returns a new ImmutableSlice representing the subslice of the
+// original ImmutableSlice from the given left index (inclusive) to the right
+// index (exclusive). Like a native Go slice, if the indexes are out of bounds,
+// or if left > right, this function panics.
 //
-// This has O(l-r) average time complexity. Similar to At, the first time this
-// slices over a container object, a one-time shallow copy is performed which
-// takes O(k) time, where k is the total number of key-value pairs in that map.
-func (s *ImmutableSlice) SubSlice(l, r int) *ImmutableSlice {
-	if l < 0 {
-		panic(fmt.Sprintf("*green.ImmutableSlice.SubSlice: index out of range [%d]", l))
+// This has O(left-right) average time complexity.
+func (s *ImmutableSlice) SubSlice(left, right int) *ImmutableSlice {
+	if left < 0 {
+		panic(fmt.Sprintf("*green.ImmutableSlice.SubSlice: index out of range [%d]", left))
 	}
-	if r > s.Len() {
-		panic(fmt.Sprintf("*green.ImmutableSlice.SubSlice: index out of range [%d] with length %d", r, s.Len()))
+	if right > s.Len() {
+		panic(fmt.Sprintf("*green.ImmutableSlice.SubSlice: index out of range [%d] with length %d", right, s.Len()))
 	}
-	if l > r {
-		panic(fmt.Sprintf("*green.ImmutableSlice.SubSlice: slice bounds out of range [%d:%d]", l, r))
+	if left > right {
+		panic(fmt.Sprintf("*green.ImmutableSlice.SubSlice: slice bounds out of range [%d:%d]", left, right))
 	}
 
-	if l == 0 && r == s.Len() {
+	if left == 0 && right == s.Len() {
 		return s
 	}
 
-	subBase := make([]any, r-l)
-	for i := 0; i < r-l; i++ {
-		subBase[i] = s.handleBaseValue(l + i)
+	subBase := make([]any, right-left)
+	for i := 0; i < right-left; i++ {
+		subBase[i] = s.handleBaseValue(left + i)
 	}
 
-	return &ImmutableSlice{base: subBase, len: r - l}
+	return &ImmutableSlice{base: subBase, len: right - left}
 }
 
 // All iterates over all elements in the ImmutableSlice in order. This has O(k)
@@ -310,9 +297,7 @@ func (s *ImmutableSlice) SubSlice(l, r int) *ImmutableSlice {
 // iterated over.
 //
 // This has O(k') average time complexity, where k' is the number of elements in
-// the slice which get iterated over. Similar to At, the first time this
-// iterates over a container object, a one-time shallow copy is performed which
-// takes O(k) time, where k is the total number of elements in that slice.
+// the slice which get iterated over.
 func (s *ImmutableSlice) All() iter.Seq2[int, ImmutableValue] {
 	return func(yield func(int, ImmutableValue) bool) {
 		if s == nil {

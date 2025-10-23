@@ -482,8 +482,7 @@ func (s *Slice) PushFront(val any) {
 // existing references to containers within the before the ReSlice call are
 // still shared.
 //
-// This has O(k) average time complexity, where k is the number of elements in
-// the slice after reslicing.
+// This has O(left-right) average time complexity.
 func (s *Slice) ReSlice(left, right int) {
 	s2 := s.subSlice(left, right, "ReSlice")
 	if s2 == s {
@@ -499,8 +498,7 @@ func (s *Slice) ReSlice(left, right int) {
 // left > right, this function panics. No values are copied, so existing
 // references to containers within the Slice are still shared with the SubSlice.
 //
-// This has O(k) average time complexity, where k is the number of elements in
-// the returned subslice.
+// This has O(left-right) average time complexity.
 func (s *Slice) SubSlice(left, right int) *Slice {
 	return s.subSlice(left, right, "SubSlice")
 }
@@ -509,11 +507,7 @@ func (s *Slice) SubSlice(left, right int) *Slice {
 // yields nothing if the Slice is nil.
 //
 // This has O(k') average time complexity, where k' is the number of elements in
-// the Slice which get iterated over. If the Slice has not had its one-time
-// shallow copy performed yet, this performs it, costing O(k) work to shallow
-// copy the underlying slice, where k is the number of elements in that slice
-// (importantly, nested objects are not copied). This cost is amortized over
-// subsequent method calls.
+// the Slice which get iterated over.
 func (s *Slice) All() iter.Seq2[int, Value] {
 	return func(yield func(int, Value) bool) {
 		if s == nil {
@@ -605,8 +599,7 @@ func (s *Slice) Immutable() *ImmutableSlice {
 // containers affect both. If the Slice is nil, this returns nil.
 //
 // This has O(k) time complexity, where k is the number of elements in the
-// Slice. This triggers the one-time shallow copy of the base slice if it has
-// not already been performed.
+// Slice.
 func (s *Slice) Clone() *Slice {
 	if s == nil {
 		return nil
