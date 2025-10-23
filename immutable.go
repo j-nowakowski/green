@@ -6,12 +6,26 @@ import (
 	"slices"
 )
 
+/*
+	To-do items:
+	- Add custom panics
+	- Instead of one-time shallow copy, consider
+	  using a map which tracks overwrites. This was
+	  the original design but it got too confusing handling
+	  nested vanilla Go values vs ImmutableValues/Values.
+	  This should be doable. After this change, concurrency
+	  safety might be easier to implement.
+	- Optimizations which avoid unnecessary wrapping and
+	  then unwrapping Immutable/Mutables
+	- Concurrency safety
+*/
+
 type (
 	// ImmutableValue has a concrete type is either ImmutableMap,
 	// ImmutableSlice, or a literal Go type.
 	ImmutableValue any
 
-	// ImmutableMap represents a map of string keys to values.
+	// ImmutableMap represents an immutable map of key-value pairs.
 	//
 	// The methods of ImmutableMap are NOT SAFE for concurrent use.
 	// This is a planned future enhancement.
@@ -149,7 +163,20 @@ func (m *ImmutableMap) Get(key string) (ImmutableValue, bool) {
 	if !ok {
 		return nil, false
 	}
-	return m.handleBaseValue(v, key), true
+	return m.handleBaseValue(key, v), true
+}
+
+// Has returns whether the ImmutableMap contains a value for the given key.
+// If the ImmutableMap is nil, this always returns false.
+//
+// This has O(1) time complexity. It never triggers one-time shallow copies.
+func (m *ImmutableMap) Has(key string) bool {
+	if m == nil {
+		return false
+	}
+
+	_, ok := m.base[key]
+	return ok
 }
 
 // Len returns the number of fields in the ImmutableMap.
@@ -181,7 +208,7 @@ func (m *ImmutableMap) All() iter.Seq2[string, ImmutableValue] {
 		}
 
 		for k, v := range m.base {
-			v = m.handleBaseValue(v, k)
+			v = m.handleBaseValue(k, v)
 			if !yield(k, v) {
 				return
 			}
@@ -197,7 +224,7 @@ func (m *ImmutableMap) Mutable() *Map {
 		return nil
 	}
 
-	return &Map{base: m}
+	return &Map{base: m, len: m.Len()}
 }
 
 // Export returns a deep copy of the map, with all values converted to
@@ -338,17 +365,17 @@ func (m *ImmutableMap) copyBaseOnce() {
 	m.copied = true
 }
 
-func (m *ImmutableMap) handleBaseValue(v any, key string) ImmutableValue {
+func (m *ImmutableMap) handleBaseValue(k string, v any) ImmutableValue {
 	switch vv := v.(type) {
 	case map[string]any:
 		iv := NewImmutableMap(vv)
 		m.copyBaseOnce()
-		m.base[key] = iv
+		m.base[k] = iv
 		return iv
 	case []any:
 		is := NewImmutableSlice(vv)
 		m.copyBaseOnce()
-		m.base[key] = is
+		m.base[k] = is
 		return is
 	default:
 		return vv
