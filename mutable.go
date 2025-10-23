@@ -1,4 +1,4 @@
-package lzval
+package green
 
 import (
 	"fmt"
@@ -6,12 +6,6 @@ import (
 	"maps"
 	"slices"
 )
-
-// import (
-// 	"context"
-// 	"iter"
-// 	"sync"
-// )
 
 type (
 	// Value has a concrete type which is either
@@ -469,12 +463,13 @@ func (s *Slice) subSlice(l, r int, funcName string) *Slice {
 	if l < 0 {
 		panic(fmt.Sprintf("*green.Slice.%s: index out of range [%d]", funcName, l))
 	}
-	if r >= s.Len() {
+	if r > s.Len() {
 		panic(fmt.Sprintf("*green.Slice.%s: index out of range [%d] with length %d", funcName, r, s.Len()))
 	}
 	if l > r {
 		panic(fmt.Sprintf("*green.Slice.%s: slice bounds out of range [%d:%d]", funcName, l, r))
 	}
+
 	if l == 0 && r == s.Len()-1 {
 		return s
 	}
@@ -708,6 +703,4 @@ func (s *Slice) addOverwrite(i int, v any) {
 
 func (s *Slice) prependIndex(i int) int {
 	return len(s.prepends) - 1 - i
-
-	// 3, 2, 1, 0
 }

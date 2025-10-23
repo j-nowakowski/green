@@ -1,6 +1,7 @@
-package lzval
+package green
 
 import (
+	"fmt"
 	"iter"
 	"maps"
 	"slices"
@@ -257,9 +258,11 @@ func (m *ImmutableMap) Export() map[string]any {
 // objects are not copied). This cost is amortized over future calls to At,
 // All, and Export.
 func (s *ImmutableSlice) At(index int) ImmutableValue {
-	if s == nil {
-		_ = []struct{}{}[index] // induce equivalent panic
-		return nil
+	if index < 0 {
+		panic(fmt.Sprintf("*green.ImmutableSlice.At: index out of range [%d]", index))
+	}
+	if index >= s.Len() {
+		panic(fmt.Sprintf("*green.ImmutableSlice.At: index out of range [%d] with length %d", index, s.Len()))
 	}
 
 	return s.handleBaseValue(index)
@@ -286,9 +289,14 @@ func (s *ImmutableSlice) Len() int {
 // this slices over a container object, a one-time shallow copy is performed
 // which takes O(k) time, where k is the total number of key-value pairs in that map.
 func (s *ImmutableSlice) SubSlice(l, r int) *ImmutableSlice {
-	if s == nil || l > r {
-		_ = []struct{}{}[l:r] // induce equivalent panic
-		return nil
+	if l < 0 {
+		panic(fmt.Sprintf("*green.ImmutableSlice.SubSlice: index out of range [%d]", l))
+	}
+	if r > s.Len() {
+		panic(fmt.Sprintf("*green.ImmutableSlice.SubSlice: index out of range [%d] with length %d", r, s.Len()))
+	}
+	if l > r {
+		panic(fmt.Sprintf("*green.ImmutableSlice.SubSlice: slice bounds out of range [%d:%d]", l, r))
 	}
 
 	if l == 0 && r == s.Len() {

@@ -1,4 +1,4 @@
-package lzval
+package green
 
 import (
 	"maps"
