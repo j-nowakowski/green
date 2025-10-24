@@ -1,0 +1,12 @@
+BenchmarkMutable/deepcopy_numCopies:10_eventSize:1_concurrency:32-8                10807            109950 ns/op          347200 B/op       2593 allocs/op
+BenchmarkMutable/deepcopy_numCopies:10_eventSize:101_concurrency:32-8               2143            653038 ns/op         1824410 B/op       3235 allocs/op
+BenchmarkMutable/deepcopy_numCopies:10_eventSize:201_concurrency:32-8               1154           1086993 ns/op         3299085 B/op       3237 allocs/op
+BenchmarkMutable/deepcopy_numCopies:10_eventSize:301_concurrency:32-8                723           1678060 ns/op         6166421 B/op       3240 allocs/op
+BenchmarkMutable/deepcopy_numCopies:10_eventSize:401_concurrency:32-8                602           2009543 ns/op         6166383 B/op       3240 allocs/op
+BenchmarkMutable/deepcopy_numCopies:10_eventSize:501_concurrency:32-8                366           3244220 ns/op        13375498 B/op       3245 allocs/op
+BenchmarkMutable/green_numCopies:10_eventSize:1_concurrency:32-8                    4762            242606 ns/op          792655 B/op       7394 allocs/op
+BenchmarkMutable/green_numCopies:10_eventSize:101_concurrency:32-8                  4845            247096 ns/op          792663 B/op       7394 allocs/op
+BenchmarkMutable/green_numCopies:10_eventSize:201_concurrency:32-8                  4796            245295 ns/op          792661 B/op       7394 allocs/op
+BenchmarkMutable/green_numCopies:10_eventSize:301_concurrency:32-8                  4756            244737 ns/op          792651 B/op       7394 allocs/op
+BenchmarkMutable/green_numCopies:10_eventSize:401_concurrency:32-8                  4898            241495 ns/op          792655 B/op       7394 allocs/op
+BenchmarkMutable/green_numCopies:10_eventSize:501_concurrency:32-8                  4768            243899 ns/op          792661 B/op       7394 allocs/op

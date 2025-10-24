@@ -2,7 +2,10 @@ module github.com/j-nowakowski/green
 
 go 1.24.3
 
-require github.com/stretchr/testify v1.10.0
+require (
+	github.com/stretchr/testify v1.10.0
+	golang.org/x/sync v0.17.0
+)
 
 require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
