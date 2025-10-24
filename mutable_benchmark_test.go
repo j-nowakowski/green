@@ -7,10 +7,15 @@ import (
 )
 
 func BenchmarkMutable(b *testing.B) {
+
 	numCopies := []int{1, 11, 21, 31, 41, 51}
-	// numCopies := []int{10}
 	numEventSizes := []int{101}
-	// numEventSizes := []int{1, 101, 201, 301, 401, 501}
+	numCopiesTest := false
+	if !numCopiesTest {
+		numCopies = []int{10}
+		numEventSizes = []int{1, 101, 201, 301, 401, 501}
+	}
+
 	concurrency := 32
 
 	payloads := make([]map[string]any, len(numEventSizes))
@@ -50,6 +55,7 @@ func BenchmarkMutable(b *testing.B) {
 		}
 		vPetsSlice[0] = "hamster"
 	}
+	_ = copyMethod
 
 	greenMethod := func(b *testing.B, im *ImmutableMap) {
 		vMut := im.Mutable()
@@ -74,28 +80,28 @@ func BenchmarkMutable(b *testing.B) {
 		_ = vMut.Immutable()
 	}
 
-	for _, numCopy := range numCopies {
-		for i, eventSize := range numEventSizes {
-			v := payloads[i]
-			b.Run(fmt.Sprintf("deepcopy_numCopies:%d_eventSize:%d_concurrency:%d", numCopy, eventSize, concurrency),
-				func(b *testing.B) {
-					for b.Loop() {
-						var wg sync.WaitGroup
-						for range concurrency {
-							wg.Add(1)
-							go func() {
-								defer wg.Done()
-								for range numCopy {
-									copyMethod(b, v)
-								}
-							}()
-						}
-						wg.Wait()
-					}
-				},
-			)
-		}
-	}
+	// for _, numCopy := range numCopies {
+	// 	for i, eventSize := range numEventSizes {
+	// 		v := payloads[i]
+	// 		b.Run(fmt.Sprintf("deepcopy_numCopies:%d_eventSize:%d_concurrency:%d", numCopy, eventSize, concurrency),
+	// 			func(b *testing.B) {
+	// 				for b.Loop() {
+	// 					var wg sync.WaitGroup
+	// 					for range concurrency {
+	// 						wg.Add(1)
+	// 						go func() {
+	// 							defer wg.Done()
+	// 							for range numCopy {
+	// 								copyMethod(b, v)
+	// 							}
+	// 						}()
+	// 					}
+	// 					wg.Wait()
+	// 				}
+	// 			},
+	// 		)
+	// 	}
+	// }
 	for _, numCopy := range numCopies {
 		for i, eventSize := range numEventSizes {
 			v := payloads[i]

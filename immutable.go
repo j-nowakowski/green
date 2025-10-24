@@ -3,8 +3,6 @@ package green
 import (
 	"fmt"
 	"iter"
-	"maps"
-	"slices"
 )
 
 /*
@@ -30,9 +28,9 @@ type (
 	// The methods of ImmutableMap are NOT SAFE for concurrent use. This is a
 	// planned future enhancement.
 	ImmutableMap struct {
-		base   map[string]any
-		copied bool
-		len    int // to avoid needing lock on Len() (lock not currently implemented)
+		base       map[string]any
+		overwrites map[string]ImmutableValue
+		len        int // to avoid needing lock on Len() (lock not currently implemented)
 	}
 
 	// ImmutableSlice provides a slice of values.
@@ -40,9 +38,9 @@ type (
 	// The methods of ImmutableSlice are NOT SAFE for concurrent use. This is a
 	// planned future enhancement.
 	ImmutableSlice struct {
-		base   []any
-		copied bool
-		len    int // to avoid needing lock on Len() (lock not currently implemented)
+		base       []any
+		overwrites map[int]ImmutableValue
+		len        int // to avoid needing lock on Len() (lock not currently implemented)
 	}
 )
 
@@ -151,11 +149,24 @@ func (m *ImmutableMap) Get(key string) (ImmutableValue, bool) {
 		return nil, false
 	}
 
-	v, ok := m.base[key]
+	if v, ok := m.overwrites[key]; ok {
+		return v, true
+	}
+
+	vBase, ok := m.base[key]
 	if !ok {
 		return nil, false
 	}
-	return m.handleBaseValue(key, v), true
+
+	v, ok := isContainer(vBase)
+	if ok {
+		if m.overwrites == nil {
+			m.overwrites = make(map[string]ImmutableValue)
+		}
+		m.overwrites[key] = v
+	}
+
+	return v, true
 }
 
 // Has returns whether the ImmutableMap contains a value for the given key. If
@@ -195,8 +206,8 @@ func (m *ImmutableMap) All() iter.Seq2[string, ImmutableValue] {
 			return
 		}
 
-		for k, v := range m.base {
-			v = m.handleBaseValue(k, v)
+		for k := range m.base {
+			v, _ := m.Get(k)
 			if !yield(k, v) {
 				return
 			}
@@ -248,7 +259,20 @@ func (s *ImmutableSlice) At(index int) ImmutableValue {
 		panic(fmt.Sprintf("*green.ImmutableSlice.At: index out of range [%d] with length %d", index, s.Len()))
 	}
 
-	return s.handleBaseValue(index)
+	if v, ok := s.overwrites[index]; ok {
+		return v
+	}
+
+	vBase := s.base[index]
+	v, ok := isContainer(vBase)
+	if ok {
+		if s.overwrites == nil {
+			s.overwrites = make(map[int]ImmutableValue)
+		}
+		s.overwrites[index] = v
+	}
+
+	return v
 }
 
 // Len returns the number of elements in the ImmutableSlice. If the
@@ -286,7 +310,7 @@ func (s *ImmutableSlice) SubSlice(left, right int) *ImmutableSlice {
 
 	subBase := make([]any, right-left)
 	for i := 0; i < right-left; i++ {
-		subBase[i] = s.handleBaseValue(left + i)
+		subBase[i] = s.At(left + i)
 	}
 
 	return &ImmutableSlice{base: subBase, len: right - left}
@@ -305,7 +329,7 @@ func (s *ImmutableSlice) All() iter.Seq2[int, ImmutableValue] {
 		}
 
 		for i := range s.base {
-			v := s.handleBaseValue(i)
+			v := s.At(i)
 			if !yield(i, v) {
 				return
 			}
@@ -343,54 +367,15 @@ func (s *ImmutableSlice) Export() []any {
 	return s2
 }
 
-func (m *ImmutableMap) copyBaseOnce() {
-	if m.copied {
-		return
-	}
-
-	m.base = maps.Clone(m.base)
-	m.copied = true
-}
-
-func (m *ImmutableMap) handleBaseValue(k string, v any) ImmutableValue {
+func isContainer(v any) (ImmutableValue, bool) {
 	switch vv := v.(type) {
 	case map[string]any:
 		iv := NewImmutableMap(vv)
-		m.copyBaseOnce()
-		m.base[k] = iv
-		return iv
+		return iv, true
 	case []any:
 		is := NewImmutableSlice(vv)
-		m.copyBaseOnce()
-		m.base[k] = is
-		return is
+		return is, true
 	default:
-		return vv
-	}
-}
-
-func (s *ImmutableSlice) copyBaseOnce() {
-	if s.copied {
-		return
-	}
-
-	s.base = slices.Clone(s.base)
-	s.copied = true
-}
-
-func (s *ImmutableSlice) handleBaseValue(index int) ImmutableValue {
-	switch vv := s.base[index].(type) {
-	case map[string]any:
-		iv := NewImmutableMap(vv)
-		s.copyBaseOnce()
-		s.base[index] = iv
-		return iv
-	case []any:
-		is := NewImmutableSlice(vv)
-		s.copyBaseOnce()
-		s.base[index] = is
-		return is
-	default:
-		return vv
+		return vv, false
 	}
 }
