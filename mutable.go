@@ -26,11 +26,11 @@ type (
 		// signal dirty state to the parent when this map or a nested container
 		// is mutated.
 		parent reportable
-		// cloneParent tracks the parent container of the original copy of the
+		// originalParent tracks the parent container of the original copy of the
 		// map when the map was created via Clone(). It is used to signal dirty
 		// state to the original parent when nested, shared data is mutated, but
 		// to avoid making such signals if the mutation is on the clone only.
-		cloneParent reportable
+		originalParent reportable
 		// dirty tracks whether this map or a nested container has been mutated
 		// since creation.
 		dirty bool
@@ -60,11 +60,11 @@ type (
 		// signal dirty state to the parent when this slice or a nested
 		// container is mutated.
 		parent reportable
-		// cloneParent tracks the parent of the original copy of the slice when
+		// originalParent tracks the parent of the original copy of the slice when
 		// the slice was created via Clone(). It is used to signal dirty state
 		// to the original parent when nested, shared data is mutated, but to
 		// avoid making such signals if the mutation is on the clone only.
-		cloneParent reportable
+		originalParent reportable
 		// dirty tracks whether this slice or a nested container has been
 		// mutated since creation.
 		dirty bool
@@ -326,12 +326,12 @@ func (m *Map) Clone() *Map {
 	}
 
 	return &Map{
-		base:        m.base,
-		overwrites:  maps.Clone(m.overwrites),
-		deletions:   maps.Clone(m.deletions),
-		cloneParent: m.cloneParent,
-		dirty:       m.dirty,
-		len:         m.len,
+		base:           m.base,
+		overwrites:     maps.Clone(m.overwrites),
+		deletions:      maps.Clone(m.deletions),
+		originalParent: m.originalParent,
+		dirty:          m.dirty,
+		len:            m.len,
 	}
 }
 
@@ -616,7 +616,7 @@ func (s *Slice) Clone() *Slice {
 		appends:         slices.Clone(s.appends),
 		prepends:        slices.Clone(s.prepends),
 		parent:          s.parent,
-		cloneParent:     s.cloneParent,
+		originalParent:  s.originalParent,
 		dirty:           s.dirty,
 	}
 }
@@ -641,7 +641,7 @@ func (s *Slice) Export() []any {
 }
 
 type (
-	// reportable is an interface which mutable containers must implement. It is
+	// reportable is an interface which mutable containers implement. It is
 	// used to signal dirty state to parent containers.
 	reportable interface {
 		reportDirty()
@@ -653,22 +653,22 @@ func handleBaseValue(v any, parent reportable) (any, bool) {
 	case *ImmutableMap:
 		v2 := v.Mutable()
 		v2.parent = parent
-		v2.cloneParent = parent
+		v2.originalParent = parent
 		return v2, true
 	case *ImmutableSlice:
 		v2 := v.Mutable()
 		v2.parent = parent
-		v2.cloneParent = parent
+		v2.originalParent = parent
 		return v2, true
 	case map[string]any:
 		v2 := NewImmutableMap(v).Mutable()
 		v2.parent = parent
-		v2.cloneParent = parent
+		v2.originalParent = parent
 		return v2, true
 	case []any:
 		v2 := NewImmutableSlice(v).Mutable()
 		v2.parent = parent
-		v2.cloneParent = parent
+		v2.originalParent = parent
 		return v2, true
 	default:
 		return v, false
@@ -689,8 +689,8 @@ func (m *Map) reportDirty() {
 		if m.parent != nil {
 			m.parent.reportDirty()
 		}
-		if m.cloneParent != nil {
-			m.cloneParent.reportDirty()
+		if m.originalParent != nil {
+			m.originalParent.reportDirty()
 		}
 	}
 }
@@ -715,8 +715,8 @@ func (s *Slice) reportDirty() {
 		if s.parent != nil {
 			s.parent.reportDirty()
 		}
-		if s.cloneParent != nil {
-			s.cloneParent.reportDirty()
+		if s.originalParent != nil {
+			s.originalParent.reportDirty()
 		}
 	}
 }
@@ -824,7 +824,7 @@ func (s *Slice) subSlice(l, r int, funcName string) *Slice {
 		appends:         newAppends,
 		prepends:        newPrepends,
 		parent:          s.parent,
-		cloneParent:     s.cloneParent,
+		originalParent:  s.originalParent,
 		dirty:           s.dirty,
 	}
 }
