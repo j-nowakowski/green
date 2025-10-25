@@ -1,15 +1,11 @@
 package green
 
 import (
+	"encoding/json"
 	"fmt"
 	"iter"
 	"sync"
 )
-
-/*
-	To-do items:
-	- JSON marshalling/unmarshalling
-*/
 
 type (
 	// ImmutableValue has a concrete type is either ImmutableMap,
@@ -21,18 +17,24 @@ type (
 	//
 	// ImmutableMap methods are safe for concurrent use.
 	ImmutableMap struct {
-		base       map[string]any
-		overwrites map[string]ImmutableValue
-		mu         sync.Mutex
+		base        map[string]any
+		overwrites  map[string]ImmutableValue
+		mu          sync.Mutex
+		jsonBytes   []byte
+		jsonError   error
+		jsonMarshal sync.Once
 	}
 
 	// ImmutableSlice provides a slice of values.
 	//
 	// ImmutableSlice methods are safe for concurrent use.
 	ImmutableSlice struct {
-		base       []any
-		overwrites map[int]ImmutableValue
-		mu         sync.Mutex
+		base        []any
+		overwrites  map[int]ImmutableValue
+		mu          sync.Mutex
+		jsonBytes   []byte
+		jsonError   error
+		jsonMarshal sync.Once
 	}
 )
 
@@ -194,6 +196,17 @@ func (m *ImmutableMap) Equal(other any) bool {
 	return equalImmuteMap(m, other)
 }
 
+func (m *ImmutableMap) MarshalJSON() ([]byte, error) {
+	m.jsonMarshal.Do(func() {
+		tmpMap := make(map[string]any, m.Len())
+		for k, v := range m.All() {
+			tmpMap[k] = v
+		}
+		m.jsonBytes, m.jsonError = json.Marshal(tmpMap)
+	})
+	return m.jsonBytes, m.jsonError
+}
+
 // At retrieves the ImmutableValue at the specified index. Like a native Go
 // slice, if the index is out of bounds, this function panics.
 //
@@ -328,6 +341,17 @@ func (s *ImmutableSlice) Export() []any {
 
 func (s *ImmutableSlice) Equal(other any) bool {
 	return equalImmuteSlice(s, other)
+}
+
+func (s *ImmutableSlice) MarshalJSON() ([]byte, error) {
+	s.jsonMarshal.Do(func() {
+		tmpSlice := make([]any, s.Len())
+		for i, v := range s.All() {
+			tmpSlice[i] = v
+		}
+		s.jsonBytes, s.jsonError = json.Marshal(tmpSlice)
+	})
+	return s.jsonBytes, s.jsonError
 }
 
 func isContainer(v any) (ImmutableValue, bool) {

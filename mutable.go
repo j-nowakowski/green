@@ -1,6 +1,7 @@
 package green
 
 import (
+	"encoding/json"
 	"fmt"
 	"iter"
 	"maps"
@@ -297,6 +298,17 @@ func (m *Map) Export() map[string]any {
 
 func (m *Map) Equal(other any) bool {
 	return equalMap(m, other)
+}
+
+func (m *Map) MarshalJSON() ([]byte, error) {
+	if !m.dirty {
+		return m.base.MarshalJSON()
+	}
+	tmpMap := make(map[string]any, m.Len())
+	for k, v := range m.All() {
+		tmpMap[k] = v
+	}
+	return json.Marshal(tmpMap)
 }
 
 // At retrieves the Value at the specified index. Like a native Go slice, if the
@@ -596,6 +608,17 @@ func (s *Slice) Export() []any {
 
 func (s *Slice) Equal(other any) bool {
 	return equalSlice(s, other)
+}
+
+func (s *Slice) MarshalJSON() ([]byte, error) {
+	if !s.dirty {
+		return s.base.MarshalJSON()
+	}
+	tmpSlice := make([]any, s.Len())
+	for i, v := range s.All() {
+		tmpSlice[i] = v
+	}
+	return json.Marshal(tmpSlice)
 }
 
 type (
