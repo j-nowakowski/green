@@ -26,7 +26,6 @@ type (
 	ImmutableMap struct {
 		base       map[string]any
 		overwrites map[string]ImmutableValue
-		len        int // to avoid needing lock on Len() (lock not currently implemented)
 		mu         sync.Mutex
 	}
 
@@ -36,7 +35,6 @@ type (
 	ImmutableSlice struct {
 		base       []any
 		overwrites map[int]ImmutableValue
-		len        int // to avoid needing lock on Len() (lock not currently implemented)
 		mu         sync.Mutex
 	}
 )
@@ -48,7 +46,7 @@ type (
 //
 // This has O(1) time complexity.
 func NewImmutableMap(m map[string]any) *ImmutableMap {
-	return &ImmutableMap{base: m, len: len(m)}
+	return &ImmutableMap{base: m}
 }
 
 // NewImmutableSlice wraps a slice containing only native Go types and returns
@@ -58,7 +56,7 @@ func NewImmutableMap(m map[string]any) *ImmutableMap {
 //
 // This has O(1) time complexity.
 func NewImmutableSlice(s []any) *ImmutableSlice {
-	return &ImmutableSlice{base: s, len: len(s)}
+	return &ImmutableSlice{base: s}
 }
 
 // ExportImmutableValue converts an ImmutableValue into its native Go type. For
@@ -191,7 +189,7 @@ func (m *ImmutableMap) Len() int {
 		return 0
 	}
 
-	return m.len
+	return len(m.base)
 }
 
 // All iterates over all key, value pairs in the ImmutableMap. Like iterating
@@ -287,7 +285,7 @@ func (s *ImmutableSlice) Len() int {
 		return 0
 	}
 
-	return s.len
+	return len(s.base)
 }
 
 // SubSlice returns a new ImmutableSlice representing the subslice of the
@@ -316,7 +314,7 @@ func (s *ImmutableSlice) SubSlice(left, right int) *ImmutableSlice {
 		subBase[i] = s.At(left + i)
 	}
 
-	return &ImmutableSlice{base: subBase, len: right - left}
+	return &ImmutableSlice{base: subBase}
 }
 
 // All iterates over all elements in the ImmutableSlice in order. This has O(k)

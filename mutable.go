@@ -307,7 +307,7 @@ func (m *Map) Immutable() *ImmutableMap {
 		}
 		im[k] = v
 	}
-	return &ImmutableMap{base: im, len: len(im)}
+	return &ImmutableMap{base: im}
 }
 
 // Clone returns a shallow copy of the Map. Subsequent mutations to the clone do
@@ -592,7 +592,7 @@ func (s *Slice) Immutable() *ImmutableSlice {
 		addElement(v)
 	}
 
-	return &ImmutableSlice{base: is, len: len(is)}
+	return &ImmutableSlice{base: is}
 }
 
 // Clone returns a shallow copy of the Slice. Subsequent mutations to the clone
