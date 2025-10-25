@@ -7,13 +7,13 @@ slice is not mutated by other code. The result is that owners of container
 entities are forced to deep copy their entities prior to passing in to
 potentially mutating code, which is expensive.
 
-For example, an application wide cache might serve the results of recent
-queries for future asynchronous requests to leverage. If the cache returns a
-native Go map or slice, if any of the future asynchronous queries mutates it,
-then the othe requests will see mutated data, leading to hard-to-track bugs.
+For example, an application wide cache might serve the results of recent queries
+for future asynchronous requests to leverage. If the cache returns a native Go
+map or slice and one of the future asynchronous queries mutates it, then the
+other requests will see mutated data, leading to hard-to-track bugs.
 
 `green` introduces **immutable** and **mutable** container types with methods
-which are semantically similar to their Go equivalents. As their name suggests,
+which are semantically similar to their Go equivalents. As the names suggest,
 immutable maps and slices can be read from but not modified. Nested containers
 within immutables are themselves immutable. Immutable values can derive mutable
 views of the underlying immutable value. Mutable values can be modified without
@@ -73,6 +73,9 @@ if !ok {
     // handle
 }
 tricksSlice, ok := tricks.(*green.Slice) // mutable slice
+if !ok {
+    // handle
+}
 tricksSlice.Set(1, "laydown")
 tricksSlice.Push("speak")
 
