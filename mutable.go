@@ -27,10 +27,11 @@ type (
 		// signal dirty state to the parent when this map or a nested container
 		// is mutated.
 		parent reportable
-		// originalParent tracks the parent container of the original copy of the
-		// map when the map was created via Clone(). It is used to signal dirty
-		// state to the original parent when nested, shared data is mutated, but
-		// to avoid making such signals if the mutation is on the clone only.
+		// originalParent tracks the parent container of the original copy of
+		// the map when the map was created via Clone(). It is used to signal
+		// dirty state to the original parent when nested, shared data is
+		// mutated, but to avoid making such signals if the mutation is on the
+		// clone only.
 		originalParent reportable
 		// dirty tracks whether this map or a nested container has been mutated
 		// since creation.
@@ -42,8 +43,9 @@ type (
 
 	// Slice provides a mutable slice of values.
 	//
-	// The methods for Slice are NOT SAFE for concurrent use. To safely read from
-	// a Slice concurrently, first convert it to an ImmutableSlice via Immutable().
+	// The methods for Slice are NOT SAFE for concurrent use. To safely read
+	// from a Slice concurrently, first convert it to an ImmutableSlice via
+	// Immutable().
 	Slice struct {
 		base *ImmutableSlice
 		// overwrites are writes that overrides values in base.
@@ -62,10 +64,10 @@ type (
 		// signal dirty state to the parent when this slice or a nested
 		// container is mutated.
 		parent reportable
-		// originalParent tracks the parent of the original copy of the slice when
-		// the slice was created via Clone(). It is used to signal dirty state
-		// to the original parent when nested, shared data is mutated, but to
-		// avoid making such signals if the mutation is on the clone only.
+		// originalParent tracks the parent of the original copy of the slice
+		// when the slice was created via Clone(). It is used to signal dirty
+		// state to the original parent when nested, shared data is mutated, but
+		// to avoid making such signals if the mutation is on the clone only.
 		originalParent reportable
 		// dirty tracks whether this slice or a nested container has been
 		// mutated since creation.
@@ -73,82 +75,13 @@ type (
 	}
 )
 
-// ExportValue converts a Value into its native Go type. For Map and Slice
-// types, this performs a deep copy of the entire structure.
-//
-// This has O(n) time complexity, where n is the total number of nodes in the
-// graph representing the underlying value.
-func ExportValue(v Value) any {
-	switch v := v.(type) {
-	case *Map:
-		return v.Export()
-	case *Slice:
-		return v.Export()
-	default:
-		return v
-	}
-}
-
-// EqualValues compares two Values for deep equality. It returns true if they
-// are deeply equal, false otherwise. It optimizes for the cases where both
-// values (or nested values) are the same Map or Slice instance, checked by
-// pointer equality. Even if two values are different instances, they are still
-// considered equal if their contents are deeply equal.
-//
-// This has O(n) time complexity, where n is the total number of nodes among
-// both a and b in the graph representing their underlying values. In practice,
-// this might be much faster due to pointer equality optimizations.
-func EqualValues(a, b Value) bool {
-	switch va := a.(type) {
-	case *Map:
-		vb, ok := b.(*Map)
-		if !ok {
-			return false
-		}
-		if va == vb {
-			// shortcut: same pointer, must be identical
-			return true
-		}
-		if va.Len() != vb.Len() {
-			return false
-		}
-		for k, vaValue := range va.All() {
-			vbValue, ok := vb.Get(k)
-			if !ok {
-				return false
-			}
-			if !EqualValues(vaValue, vbValue) {
-				return false
-			}
-		}
-		return true
-	case *Slice:
-		vb, ok := b.(*Slice)
-		if !ok {
-			return false
-		}
-		if va == vb {
-			// shortcut: same pointer, must be identical
-			return true
-		}
-		if va.Len() != vb.Len() {
-			return false
-		}
-		for i, vaValue := range va.All() {
-			vbValue := vb.At(i)
-			if !EqualValues(vaValue, vbValue) {
-				return false
-			}
-		}
-		return true
-	default:
-		return a == b
-	}
-}
-
 // Get retrieves a Value for the value associated with the given key in the Map
 // and a boolean indicating whether a value for that key exists. If the Map is
 // nil, this always returns (nil, false).
+//
+// If Get would find a container value (immutable, mutable, or native Go), it
+// wraps that value in a mutable container before returning it. Thus, the only
+// containers this function can return are *green.Map and *green.Slice.
 //
 // This has O(1) average time complexity.
 func (m *Map) Get(key string) (Value, bool) {
@@ -195,6 +128,10 @@ func (m *Map) Has(key string) bool {
 // Set sets the value for the given key in the Map. If the Map is nil, this
 // panics.
 //
+// Values passed into the Set function should not be mutated after being set.
+// Normal Go values can be passed in, along with immutable and mutable
+// containers.
+//
 // This has O(1) average time complexity.
 func (m *Map) Set(key string, val any) {
 	if m == nil {
@@ -239,11 +176,13 @@ func (m *Map) Len() int {
 	return m.len
 }
 
-// All iterates over all key, value pairs in the Map. Like iterating over a
-// native Go map, the order of pairs is non-deterministic. Unlike a native Go
-// map, the order of iteration is not from a uniform random distribution due to
-// how the underlying data is stored, so do not rely on this function for full
-// and secure randomization. This function yields nothing if the Map is nil.
+// All returns an iterator over all key, value pairs in the Map. Like iterating
+// over a native Go map, the order of pairs is non-deterministic. Unlike a
+// native Go map, the order of iteration is not from a uniform random
+// distribution due to how the underlying data is stored, so do not rely on this
+// function for full and secure randomization. This function yields nothing if
+// the Map is nil. See the Get function for details on the types of values
+// yielded.
 //
 // This has O(k') average time complexity, where k' is the number of key-value
 // pairs in the Map which get iterated over.
@@ -351,13 +290,21 @@ func (m *Map) Export() map[string]any {
 
 	m2 := make(map[string]any, m.Len())
 	for k, v := range m.All() {
-		m2[k] = ExportValue(v)
+		m2[k] = Export(v)
 	}
 	return m2
 }
 
+func (m *Map) Equal(other any) bool {
+	return equalMap(m, other)
+}
+
 // At retrieves the Value at the specified index. Like a native Go slice, if the
 // index is out of bounds, this function panics.
+//
+// If At would find a container value (immutable, mutable, or native Go), it
+// wraps that value in a mutable container before returning it. Thus, the only
+// containers this function can return are *green.Map and *green.Slice.
 //
 // This has O(1) average time complexity.
 func (s *Slice) At(index int) Value {
@@ -372,7 +319,7 @@ func (s *Slice) At(index int) Value {
 	if index < len(s.prepends) {
 		prependIndex := s.prependIndex(index)
 		v := s.prepends[prependIndex]
-		v, ok := handleBaseValue(v, s)
+		v, ok := isContainerMutable(v, s)
 		if ok {
 			s.prepends[prependIndex] = v
 		}
@@ -384,13 +331,13 @@ func (s *Slice) At(index int) Value {
 	if index < s.base.Len() {
 		v, ok := s.getOverride(index)
 		if ok {
-			v, ok := handleBaseValue(v, s)
+			v, ok := isContainerMutable(v, s)
 			if ok {
 				s.addOverwrite(index, v)
 			}
 			return v
 		}
-		v, ok = handleBaseValue(s.base.At(index), s)
+		v, ok = isContainerMutable(s.base.At(index), s)
 		if ok {
 			s.addOverwrite(index, v)
 		}
@@ -400,7 +347,7 @@ func (s *Slice) At(index int) Value {
 	// in appends
 	index -= s.base.Len()
 	v := s.appends[index]
-	v, ok := handleBaseValue(v, s)
+	v, ok := isContainerMutable(v, s)
 	if ok {
 		s.appends[index] = v
 	}
@@ -409,6 +356,10 @@ func (s *Slice) At(index int) Value {
 
 // Set sets the value at the specified index in the Slice. Like a native Go
 // slice, if the index is out of bounds, this function panics.
+//
+// Values passed into the Set function should not be mutated after being set.
+// Normal Go values can be passed in, along with immutable and mutable
+// containers.
 //
 // This has O(1) average time complexity.
 func (s *Slice) Set(index int, val any) {
@@ -505,8 +456,9 @@ func (s *Slice) SubSlice(left, right int) *Slice {
 	return s.subSlice(left, right, "SubSlice")
 }
 
-// All iterates over all index, value pairs in the Slice in order. This function
-// yields nothing if the Slice is nil.
+// All returns an iterator over all index, value pairs in the Slice in order.
+// This function yields nothing if the Slice is nil. See the At function for
+// details on the types of values yielded.
 //
 // This has O(k') average time complexity, where k' is the number of elements in
 // the Slice which get iterated over.
@@ -517,7 +469,7 @@ func (s *Slice) All() iter.Seq2[int, Value] {
 		}
 		for i := s.prependIndex(0); i >= 0; i-- {
 			v := s.prepends[i]
-			v, ok := handleBaseValue(v, s)
+			v, ok := isContainerMutable(v, s)
 			if ok {
 				s.prepends[i] = v
 			}
@@ -529,7 +481,7 @@ func (s *Slice) All() iter.Seq2[int, Value] {
 			if v2, ok := s.getOverride(i); ok {
 				v = v2
 			}
-			v, ok := handleBaseValue(v, s)
+			v, ok := isContainerMutable(v, s)
 			if ok {
 				s.addOverwrite(i, v)
 			}
@@ -538,7 +490,7 @@ func (s *Slice) All() iter.Seq2[int, Value] {
 			}
 		}
 		for i, v := range s.appends {
-			v, ok := handleBaseValue(v, s)
+			v, ok := isContainerMutable(v, s)
 			if ok {
 				s.appends[i] = v
 			}
@@ -637,20 +589,24 @@ func (s *Slice) Export() []any {
 
 	s2 := make([]any, s.Len())
 	for i, v := range s.All() {
-		s2[i] = ExportValue(v)
+		s2[i] = Export(v)
 	}
 	return s2
 }
 
+func (s *Slice) Equal(other any) bool {
+	return equalSlice(s, other)
+}
+
 type (
-	// reportable is an interface which mutable containers implement. It is
-	// used to signal dirty state to parent containers.
+	// reportable is an interface which mutable containers implement. It is used
+	// to signal dirty state to parent containers.
 	reportable interface {
 		reportDirty()
 	}
 )
 
-func handleBaseValue(v any, parent reportable) (any, bool) {
+func isContainerMutable(v any, parent reportable) (any, bool) {
 	switch v := v.(type) {
 	case *ImmutableMap:
 		v2 := v.Mutable()
@@ -678,7 +634,7 @@ func handleBaseValue(v any, parent reportable) (any, bool) {
 }
 
 func (m *Map) handleBaseValue(k string, v any) any {
-	v, ok := handleBaseValue(v, m)
+	v, ok := isContainerMutable(v, m)
 	if ok {
 		m.addOverwrite(k, v)
 	}
@@ -798,13 +754,13 @@ func (s *Slice) subSlice(l, r int, funcName string) *Slice {
 
 	// force wrapping of immediately nested values
 	for i, v := range newPrepends {
-		v, ok := handleBaseValue(v, s)
+		v, ok := isContainerMutable(v, s)
 		if ok {
 			newPrepends[i] = v // updates underlying array too
 		}
 	}
 	for i, v := range newAppends {
-		v, ok := handleBaseValue(v, s)
+		v, ok := isContainerMutable(v, s)
 		if ok {
 			newAppends[i] = v // updates underlying array too
 		}
@@ -813,7 +769,7 @@ func (s *Slice) subSlice(l, r int, funcName string) *Slice {
 		if v2, ok := s.getOverride(i + newOverwriteOffset); ok {
 			v = v2
 		}
-		v, ok := handleBaseValue(v, s)
+		v, ok := isContainerMutable(v, s)
 		if ok {
 			s.addOverwrite(i+newOverwriteOffset, v)
 		}

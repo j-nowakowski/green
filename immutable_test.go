@@ -362,26 +362,26 @@ func TestImmutable(t *testing.T) {
 		im1 := NewImmutableMap(m1)
 		im1Copy := NewImmutableMap(m1Copy)
 
-		assert.True(t, EqualImmutableValues(im1, im1))
-		assert.True(t, EqualImmutableValues(im1, im1Copy), "ImmutableMaps with same content should be equal")
+		assert.True(t, Equal(im1, im1))
+		assert.True(t, Equal(im1, im1Copy), "ImmutableMaps with same content should be equal")
 
-		assert.False(t, EqualImmutableValues(im1, "foo"))
-		assert.False(t, EqualImmutableValues(im1, NewImmutableSlice([]any{1})))
+		assert.False(t, Equal(im1, "foo"))
+		assert.False(t, Equal(im1, NewImmutableSlice([]any{1})))
 
-		assert.False(t, EqualImmutableValues(im1, NewImmutableMap(map[string]any{
+		assert.False(t, Equal(im1, NewImmutableMap(map[string]any{
 			"key1": "different",
 			"key2": key2Map,
 			"key3": key3Slice,
 		})))
 
-		assert.False(t, EqualImmutableValues(im1, NewImmutableMap(map[string]any{
+		assert.False(t, Equal(im1, NewImmutableMap(map[string]any{
 			"key1": "value1",
 			"key2": key2Map,
 			"key3": key3Slice,
 			"foo":  "bar",
 		})))
 
-		assert.False(t, EqualImmutableValues(im1, NewImmutableMap(map[string]any{
+		assert.False(t, Equal(im1, NewImmutableMap(map[string]any{
 			"key1": "value1",
 			"key2": map[string]any{
 				"nestedKey1": 42,
@@ -390,7 +390,7 @@ func TestImmutable(t *testing.T) {
 			"key3": key3Slice,
 		})))
 
-		assert.False(t, EqualImmutableValues(im1, NewImmutableMap(map[string]any{
+		assert.False(t, Equal(im1, NewImmutableMap(map[string]any{
 			"key1": "value1",
 			"key2": map[string]any{
 				"nestedKey1": 43,
@@ -398,7 +398,7 @@ func TestImmutable(t *testing.T) {
 			"key3": key3Slice,
 		})))
 
-		assert.False(t, EqualImmutableValues(im1, NewImmutableMap(map[string]any{
+		assert.False(t, Equal(im1, NewImmutableMap(map[string]any{
 			"key1": "value1",
 			"key2": map[string]any{
 				"nestedKey1": 42,
@@ -406,7 +406,7 @@ func TestImmutable(t *testing.T) {
 			"key3": []any{1, 2},
 		})))
 
-		assert.False(t, EqualImmutableValues(im1, NewImmutableMap(map[string]any{
+		assert.False(t, Equal(im1, NewImmutableMap(map[string]any{
 			"key1": "value1",
 			"key2": map[string]any{
 				"nestedKey1": 42,
@@ -430,21 +430,21 @@ func TestImmutable(t *testing.T) {
 		is1 := NewImmutableSlice(s1)
 		is1Copy := NewImmutableSlice(s1Copy)
 
-		assert.True(t, EqualImmutableValues(is1, is1))
-		assert.True(t, EqualImmutableValues(is1, is1Copy), "ImmutableSlices with same content should be equal")
+		assert.True(t, Equal(is1, is1))
+		assert.True(t, Equal(is1, is1Copy), "ImmutableSlices with same content should be equal")
 
-		assert.False(t, EqualImmutableValues(is1, "foo"))
-		assert.False(t, EqualImmutableValues(is1, NewImmutableMap(map[string]any{"foo": "bar"})))
+		assert.False(t, Equal(is1, "foo"))
+		assert.False(t, Equal(is1, NewImmutableMap(map[string]any{"foo": "bar"})))
 
 		// different first element
-		assert.False(t, EqualImmutableValues(is1, NewImmutableSlice([]any{
+		assert.False(t, Equal(is1, NewImmutableSlice([]any{
 			"different",
 			nestedMap,
 			nestedSlice,
 		})))
 
 		// extra element
-		assert.False(t, EqualImmutableValues(is1, NewImmutableSlice([]any{
+		assert.False(t, Equal(is1, NewImmutableSlice([]any{
 			"value1",
 			nestedMap,
 			nestedSlice,
@@ -452,7 +452,7 @@ func TestImmutable(t *testing.T) {
 		})))
 
 		// nested map has extra key
-		assert.False(t, EqualImmutableValues(is1, NewImmutableSlice([]any{
+		assert.False(t, Equal(is1, NewImmutableSlice([]any{
 			"value1",
 			map[string]any{
 				"nestedKey1": 42,
@@ -462,7 +462,7 @@ func TestImmutable(t *testing.T) {
 		})))
 
 		// nested map value changed
-		assert.False(t, EqualImmutableValues(is1, NewImmutableSlice([]any{
+		assert.False(t, Equal(is1, NewImmutableSlice([]any{
 			"value1",
 			map[string]any{
 				"nestedKey1": 43,
@@ -471,14 +471,14 @@ func TestImmutable(t *testing.T) {
 		})))
 
 		// nested slice longer
-		assert.False(t, EqualImmutableValues(is1, NewImmutableSlice([]any{
+		assert.False(t, Equal(is1, NewImmutableSlice([]any{
 			"value1",
 			nestedMap,
 			[]any{1, 2},
 		})))
 
 		// nested slice different element
-		assert.False(t, EqualImmutableValues(is1, NewImmutableSlice([]any{
+		assert.False(t, Equal(is1, NewImmutableSlice([]any{
 			"value1",
 			nestedMap,
 			[]any{2},

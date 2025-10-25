@@ -70,7 +70,7 @@ func TestMutable(t *testing.T) {
 
 			mut1FromAll := map[string]any{}
 			for k, v := range mut1.All() {
-				mut1FromAll[k] = ExportValue(v)
+				mut1FromAll[k] = Export(v)
 			}
 			assert.Equal(t, m, mut1FromAll)
 			assert.Equal(t, mOriginal, mut1FromAll)
@@ -101,7 +101,7 @@ func TestMutable(t *testing.T) {
 				"k5": "v5-new",
 			}
 			assert.Equal(t, expectMut1, mut1.Export())
-			assert.True(t, EqualValues(NewImmutableMap(expectMut1).Mutable(), mut1))
+			assert.True(t, Equal(NewImmutableMap(expectMut1).Mutable(), mut1))
 			assert.Equal(t, mOriginal, m)
 
 			require.True(t, mut1.Has("k1"))
@@ -135,12 +135,12 @@ func TestMutable(t *testing.T) {
 
 			mut1AfterFromAll := map[string]any{}
 			for k, v := range mut1.All() {
-				mut1AfterFromAll[k] = ExportValue(v)
+				mut1AfterFromAll[k] = Export(v)
 			}
 			assert.Equal(t, expectMut1, mut1AfterFromAll)
 
 			assert.Equal(t, m, mut2.Export())
-			assert.True(t, EqualValues(NewImmutableMap(m).Mutable(), mut2))
+			assert.True(t, Equal(NewImmutableMap(m).Mutable(), mut2))
 
 			expectMut1Clone := map[string]any{
 				"k1": "v1",
@@ -153,7 +153,7 @@ func TestMutable(t *testing.T) {
 				"k4": "v4",
 			}
 			assert.Equal(t, expectMut1Clone, mut1Clone.Export())
-			assert.True(t, EqualValues(NewImmutableMap(expectMut1Clone).Mutable(), mut1Clone))
+			assert.True(t, Equal(NewImmutableMap(expectMut1Clone).Mutable(), mut1Clone))
 
 			assert.Equal(t, mOriginal, im.Export())
 		})
@@ -371,7 +371,7 @@ func TestMutable(t *testing.T) {
 
 			mut1FromAll := make([]any, mut1.Len())
 			for i, v := range mut1.All() {
-				mut1FromAll[i] = ExportValue(v)
+				mut1FromAll[i] = Export(v)
 			}
 			assert.Equal(t, s, mut1FromAll)
 			assert.Equal(t, sOriginal, mut1FromAll)
@@ -399,7 +399,7 @@ func TestMutable(t *testing.T) {
 				"e5-new",
 			}
 			assert.Equal(t, expectMut1, mut1.Export())
-			assert.True(t, EqualValues(NewImmutableSlice(expectMut1).Mutable(), mut1))
+			assert.True(t, Equal(NewImmutableSlice(expectMut1).Mutable(), mut1))
 			assert.Equal(t, sOriginal, s)
 
 			e0 := mut1.At(0)
@@ -424,12 +424,12 @@ func TestMutable(t *testing.T) {
 
 			mut1AfterFromAll := make([]any, mut1.Len())
 			for i, v := range mut1.All() {
-				mut1AfterFromAll[i] = ExportValue(v)
+				mut1AfterFromAll[i] = Export(v)
 			}
 			assert.Equal(t, expectMut1, mut1AfterFromAll)
 
 			assert.Equal(t, s, mut2.Export())
-			assert.True(t, EqualValues(NewImmutableSlice(s).Mutable(), mut2))
+			assert.True(t, Equal(NewImmutableSlice(s).Mutable(), mut2))
 			expectMut1Clone := []any{
 				"e1",
 				map[string]any{
@@ -441,7 +441,7 @@ func TestMutable(t *testing.T) {
 				"e4",
 			}
 			assert.Equal(t, expectMut1Clone, mut1Clone.Export())
-			assert.True(t, EqualValues(NewImmutableSlice(expectMut1Clone).Mutable(), mut1Clone))
+			assert.True(t, Equal(NewImmutableSlice(expectMut1Clone).Mutable(), mut1Clone))
 
 			assert.Equal(t, sOriginal, is.Export())
 		})
@@ -623,7 +623,7 @@ func TestMutable(t *testing.T) {
 			assert.Equal(t, expectAfterPushes, baseMut.Export())
 			baseMutFromAll := make([]any, baseMut.Len())
 			for i, v := range baseMut.All() {
-				baseMutFromAll[i] = ExportValue(v)
+				baseMutFromAll[i] = Export(v)
 			}
 			assert.Equal(t, expectAfterPushes, baseMutFromAll)
 

@@ -8,9 +8,6 @@ import (
 
 /*
 	To-do items:
-	- Optimizations which avoid unnecessary wrapping and then unwrapping
-	  Immutable/Mutables
-	- Create a common function for both immutable and mutable comparisons
 	- JSON marshalling/unmarshalling
 */
 
@@ -76,67 +73,14 @@ func ExportImmutableValue(iv ImmutableValue) any {
 	}
 }
 
-// EqualImmutableValues compares two ImmutableValues for deep equality. It
-// returns true if they are deeply equal, false otherwise. It optimizes for the
-// cases where both values (or nested values) are the same ImmutableMap or
-// ImmutableSlice instance, checked by pointer equality. Even if two values are
-// different instances, they are still considered equal if their contents are
-// deeply equal.
-//
-// This has O(n) time complexity, where n is the total number of nodes among
-// both a and b in the graph representing their underlying values. In practice,
-// this might be much faster due to pointer equality optimizations.
-func EqualImmutableValues(a, b ImmutableValue) bool {
-	switch va := a.(type) {
-	case *ImmutableMap:
-		vb, ok := b.(*ImmutableMap)
-		if !ok {
-			return false
-		}
-		if va == vb {
-			// shortcut: same pointer, must be identical
-			return true
-		}
-		if va.Len() != vb.Len() {
-			return false
-		}
-		for k, vaValue := range va.All() {
-			vbValue, ok := vb.Get(k)
-			if !ok {
-				return false
-			}
-			if !EqualImmutableValues(vaValue, vbValue) {
-				return false
-			}
-		}
-		return true
-	case *ImmutableSlice:
-		vb, ok := b.(*ImmutableSlice)
-		if !ok {
-			return false
-		}
-		if va == vb {
-			// shortcut: same pointer, must be identical
-			return true
-		}
-		if va.Len() != vb.Len() {
-			return false
-		}
-		for i, vaValue := range va.All() {
-			vbValue := vb.At(i)
-			if !EqualImmutableValues(vaValue, vbValue) {
-				return false
-			}
-		}
-		return true
-	default:
-		return a == b
-	}
-}
-
 // Get retrieves an ImmutableValue for the value associated with the given key
 // in the ImmutableMap and a boolean indicating whether a value for that key
 // exists. If the ImmutableMap is nil, this always returns (nil, false).
+//
+// If Get would find a container value (immutable, mutable, or native Go), it
+// wraps that value in an immutable container before returning it. Thus, the
+// only containers this function can return are *green.ImmutableMap and
+// *green.ImmutableSlice.
 //
 // This has O(1) average time complexity.
 func (m *ImmutableMap) Get(key string) (ImmutableValue, bool) {
@@ -192,9 +136,10 @@ func (m *ImmutableMap) Len() int {
 	return len(m.base)
 }
 
-// All iterates over all key, value pairs in the ImmutableMap. Like iterating
-// over a native Go map, the order of pairs is non-deterministic. This function
-// yields nothing if the ImmutableMap is nil.
+// All returns an iterator over all key, value pairs in the ImmutableMap. Like
+// iterating over a native Go map, the order of pairs is non-deterministic. This
+// function yields nothing if the ImmutableMap is nil. See the Get function for
+// details on the types of values yielded.
 //
 // This has O(k') average time complexity, where k' is the number of key-value
 // pairs in the map which get iterated over.
@@ -245,8 +190,17 @@ func (m *ImmutableMap) Export() map[string]any {
 	return m2
 }
 
+func (m *ImmutableMap) Equal(other any) bool {
+	return equalImmuteMap(m, other)
+}
+
 // At retrieves the ImmutableValue at the specified index. Like a native Go
 // slice, if the index is out of bounds, this function panics.
+//
+// If At would find a container value (immutable, mutable, or native Go), it
+// wraps that value in an immutable container before returning it. Thus, the
+// only containers this function can return are *green.ImmutableMap and
+// *green.ImmutableSlice.
 //
 // This has O(1) average time complexity.
 func (s *ImmutableSlice) At(index int) ImmutableValue {
@@ -317,9 +271,10 @@ func (s *ImmutableSlice) SubSlice(left, right int) *ImmutableSlice {
 	return &ImmutableSlice{base: subBase}
 }
 
-// All iterates over all elements in the ImmutableSlice in order. This has O(k)
-// time complexity, where k is the number of elements in the slice which were
-// iterated over.
+// All returns an iterator over all elements in the ImmutableSlice in order.
+// This has O(k) time complexity, where k is the number of elements in the slice
+// which were iterated over. See the At function for details on the types of
+// values yielded.
 //
 // This has O(k') average time complexity, where k' is the number of elements in
 // the slice which get iterated over.
@@ -369,6 +324,10 @@ func (s *ImmutableSlice) Export() []any {
 		s2[i] = ExportImmutableValue(v)
 	}
 	return s2
+}
+
+func (s *ImmutableSlice) Equal(other any) bool {
+	return equalImmuteSlice(s, other)
 }
 
 func isContainer(v any) (ImmutableValue, bool) {
