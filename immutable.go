@@ -3,18 +3,15 @@ package green
 import (
 	"fmt"
 	"iter"
+	"sync"
 )
 
 /*
 	To-do items:
-	- Instead of one-time shallow copy, consider using a map which tracks
-	  overwrites. This was the original design but it got too confusing handling
-	  nested vanilla Go values vs ImmutableValues/Values. This should be doable.
-	  After this change, concurrency safety might be easier to implement.
 	- Optimizations which avoid unnecessary wrapping and then unwrapping
 	  Immutable/Mutables
-	- Concurrency safety
 	- Create a common function for both immutable and mutable comparisons
+	- JSON marshalling/unmarshalling
 */
 
 type (
@@ -25,22 +22,22 @@ type (
 
 	// ImmutableMap provides an immutable map of key-value pairs.
 	//
-	// The methods of ImmutableMap are NOT SAFE for concurrent use. This is a
-	// planned future enhancement.
+	// ImmutableMap methods are safe for concurrent use.
 	ImmutableMap struct {
 		base       map[string]any
 		overwrites map[string]ImmutableValue
 		len        int // to avoid needing lock on Len() (lock not currently implemented)
+		mu         sync.Mutex
 	}
 
 	// ImmutableSlice provides a slice of values.
 	//
-	// The methods of ImmutableSlice are NOT SAFE for concurrent use. This is a
-	// planned future enhancement.
+	// ImmutableSlice methods are safe for concurrent use.
 	ImmutableSlice struct {
 		base       []any
 		overwrites map[int]ImmutableValue
 		len        int // to avoid needing lock on Len() (lock not currently implemented)
+		mu         sync.Mutex
 	}
 )
 
@@ -149,6 +146,9 @@ func (m *ImmutableMap) Get(key string) (ImmutableValue, bool) {
 		return nil, false
 	}
 
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	if v, ok := m.overwrites[key]; ok {
 		return v, true
 	}
@@ -215,7 +215,7 @@ func (m *ImmutableMap) All() iter.Seq2[string, ImmutableValue] {
 	}
 }
 
-// Mutable returns a mutable version of the ImmutableSlice. Subsequent mutations
+// Mutable derives a mutable version of the ImmutableMap. Subsequent mutations
 // to the returned Map do not affect the ImmutableMap. If the ImmutableMap is
 // nil, this returns nil.
 //
@@ -258,6 +258,9 @@ func (s *ImmutableSlice) At(index int) ImmutableValue {
 	if index >= s.Len() {
 		panic(fmt.Sprintf("*green.ImmutableSlice.At: index out of range [%d] with length %d", index, s.Len()))
 	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
 	if v, ok := s.overwrites[index]; ok {
 		return v
@@ -337,8 +340,11 @@ func (s *ImmutableSlice) All() iter.Seq2[int, ImmutableValue] {
 	}
 }
 
-// Mutable returns a mutable version of the ImmutableSlice. This has O(1) time
-// complexity.
+// Mutable derives a mutable version of the ImmutableSlice. Subsequent mutations
+// to the returned Slice do not affect the ImmutableSlice. If the ImmutableSlice
+// is nil, this returns nil.
+//
+// This has O(1) time complexity.
 func (s *ImmutableSlice) Mutable() *Slice {
 	if s == nil {
 		return nil

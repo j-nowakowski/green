@@ -9,7 +9,7 @@ import (
 func BenchmarkMutable(b *testing.B) {
 
 	numCopies := []int{1, 11, 21, 31, 41, 51}
-	numEventSizes := []int{101}
+	numEventSizes := []int{1000}
 	numCopiesTest := false
 	if !numCopiesTest {
 		numCopies = []int{10}
@@ -20,12 +20,13 @@ func BenchmarkMutable(b *testing.B) {
 
 	payloads := make([]map[string]any, len(numEventSizes))
 	for i, eventSize := range numEventSizes {
+
 		bigMap := make(map[string]any, eventSize)
 		for j := range eventSize {
 			bigMap[fmt.Sprintf("key-%d", j)] = fmt.Sprintf("value-%d", j)
 		}
 		v := map[string]any{
-			"bigMap":     bigMap,
+			"bigMap":     bigMap, // configurable size, not mutated
 			"last_name":  nil,
 			"arms":       2,
 			"first_name": "Adam",
@@ -35,6 +36,7 @@ func BenchmarkMutable(b *testing.B) {
 			},
 			"pets": []any{"cat", "dog", "fish"},
 		}
+
 		payloads[i] = v
 	}
 
@@ -80,28 +82,28 @@ func BenchmarkMutable(b *testing.B) {
 		_ = vMut.Immutable()
 	}
 
-	// for _, numCopy := range numCopies {
-	// 	for i, eventSize := range numEventSizes {
-	// 		v := payloads[i]
-	// 		b.Run(fmt.Sprintf("deepcopy_numCopies:%d_eventSize:%d_concurrency:%d", numCopy, eventSize, concurrency),
-	// 			func(b *testing.B) {
-	// 				for b.Loop() {
-	// 					var wg sync.WaitGroup
-	// 					for range concurrency {
-	// 						wg.Add(1)
-	// 						go func() {
-	// 							defer wg.Done()
-	// 							for range numCopy {
-	// 								copyMethod(b, v)
-	// 							}
-	// 						}()
-	// 					}
-	// 					wg.Wait()
-	// 				}
-	// 			},
-	// 		)
-	// 	}
-	// }
+	for _, numCopy := range numCopies {
+		for i, eventSize := range numEventSizes {
+			v := payloads[i]
+			b.Run(fmt.Sprintf("deepcopy_numCopies:%d_eventSize:%d_concurrency:%d", numCopy, eventSize, concurrency),
+				func(b *testing.B) {
+					for b.Loop() {
+						var wg sync.WaitGroup
+						for range concurrency {
+							wg.Add(1)
+							go func() {
+								defer wg.Done()
+								for range numCopy {
+									copyMethod(b, v)
+								}
+							}()
+						}
+						wg.Wait()
+					}
+				},
+			)
+		}
+	}
 	for _, numCopy := range numCopies {
 		for i, eventSize := range numEventSizes {
 			v := payloads[i]
@@ -113,8 +115,9 @@ func BenchmarkMutable(b *testing.B) {
 							wg.Add(1)
 							go func() {
 								defer wg.Done()
+								iv := NewImmutableMap(v)
 								for range numCopy {
-									greenMethod(b, NewImmutableMap(v))
+									greenMethod(b, iv)
 								}
 							}()
 						}

@@ -14,7 +14,8 @@ type (
 
 	// Map provides a mutable map of key-value pairs.
 	//
-	// The methods for Map are NOT SAFE for concurrent use.
+	// The methods for Map are NOT SAFE for concurrent use. To safely read from
+	// a Map concurrently, first convert it to an ImmutableMap via Immutable().
 	Map struct {
 		base *ImmutableMap
 		// overwrites are writes that override values in base.
@@ -41,7 +42,8 @@ type (
 
 	// Slice provides a mutable slice of values.
 	//
-	// The methods for Slice are NOT SAFE for concurrent use.
+	// The methods for Slice are NOT SAFE for concurrent use. To safely read from
+	// a Slice concurrently, first convert it to an ImmutableSlice via Immutable().
 	Slice struct {
 		base *ImmutableSlice
 		// overwrites are writes that overrides values in base.

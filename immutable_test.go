@@ -2,6 +2,7 @@ package green
 
 import (
 	"maps"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -9,6 +10,7 @@ import (
 )
 
 func TestImmutable(t *testing.T) {
+
 	t.Run("ImmutableMap", func(t *testing.T) {
 		key2Map := map[string]any{
 			"nestedKey1": 42,
@@ -114,6 +116,52 @@ func TestImmutable(t *testing.T) {
 		key2Map["foo"] = "bar"
 		key3Slice[0] = "bar"
 		assert.Equal(t, sourceExported, sourceExportedCopy)
+	})
+
+	t.Run("ImmutableMap_concurrency_safety", func(t *testing.T) {
+		const numGoroutines = 100
+		m := map[string]any{
+			"map":   map[string]any{},
+			"slice": []any{},
+		}
+		im := NewImmutableMap(m)
+		foundMaps := make([]*ImmutableMap, numGoroutines)
+		foundMapsFromAll := make([]*ImmutableMap, numGoroutines)
+		foundSlices := make([]*ImmutableSlice, numGoroutines)
+		foundSlicesFromAll := make([]*ImmutableSlice, numGoroutines)
+		var wg sync.WaitGroup
+		for i := range numGoroutines {
+			wg.Add(3)
+			go func() {
+				defer wg.Done()
+				gotMap, _ := im.Get("map")
+				foundMaps[i] = gotMap.(*ImmutableMap)
+			}()
+			go func() {
+				defer wg.Done()
+				gotSlice, _ := im.Get("slice")
+				foundSlices[i] = gotSlice.(*ImmutableSlice)
+			}()
+			go func() {
+				defer wg.Done()
+				for k, v := range im.All() {
+					if k == "map" {
+						foundMapsFromAll[i] = v.(*ImmutableMap)
+					} else {
+						foundSlicesFromAll[i] = v.(*ImmutableSlice)
+					}
+				}
+			}()
+		}
+		wg.Wait()
+
+		// all containers should point to the same instance
+		for i := 1; i < numGoroutines; i++ {
+			assert.True(t, foundMaps[0] == foundMaps[i], "Get should return same ImmutableMap instance across goroutines")
+			assert.True(t, foundMapsFromAll[0] == foundMapsFromAll[i], "All should return same ImmutableMap instance across goroutines")
+			assert.True(t, foundSlices[0] == foundSlices[i], "Get should return same ImmutableSlice instance across goroutines")
+			assert.True(t, foundSlicesFromAll[0] == foundSlicesFromAll[i], "All should return same ImmutableSlice instance across goroutines")
+		}
 	})
 
 	t.Run("ImmutableSlice", func(t *testing.T) {
@@ -252,6 +300,52 @@ func TestImmutable(t *testing.T) {
 		map1["a"] = 100
 		slice1[0] = 99
 		assert.Equal(t, expected, exported)
+	})
+
+	t.Run("ImmutableSlice_concurrency_safety", func(t *testing.T) {
+		const numGoroutines = 100
+		s := []any{
+			map[string]any{},
+			[]any{},
+		}
+		is := NewImmutableSlice(s)
+		foundMaps := make([]*ImmutableMap, numGoroutines)
+		foundMapsFromAll := make([]*ImmutableMap, numGoroutines)
+		foundSlices := make([]*ImmutableSlice, numGoroutines)
+		foundSlicesFromAll := make([]*ImmutableSlice, numGoroutines)
+		var wg sync.WaitGroup
+		for i := range numGoroutines {
+			wg.Add(3)
+			go func() {
+				defer wg.Done()
+				gotMap := is.At(0)
+				foundMaps[i] = gotMap.(*ImmutableMap)
+			}()
+			go func() {
+				defer wg.Done()
+				gotSlice := is.At(1)
+				foundSlices[i] = gotSlice.(*ImmutableSlice)
+			}()
+			go func() {
+				defer wg.Done()
+				for j, v := range is.All() {
+					if j == 0 {
+						foundMapsFromAll[i] = v.(*ImmutableMap)
+					} else {
+						foundSlicesFromAll[i] = v.(*ImmutableSlice)
+					}
+				}
+			}()
+		}
+		wg.Wait()
+
+		// all containers should point to the same instance
+		for i := 1; i < numGoroutines; i++ {
+			assert.True(t, foundMaps[0] == foundMaps[i], "At should return same ImmutableMap instance across goroutines")
+			assert.True(t, foundMapsFromAll[0] == foundMapsFromAll[i], "All should return same ImmutableMap instance across goroutines")
+			assert.True(t, foundSlices[0] == foundSlices[i], "At should return same ImmutableSlice instance across goroutines")
+			assert.True(t, foundSlicesFromAll[0] == foundSlicesFromAll[i], "All should return same ImmutableSlice instance across goroutines")
+		}
 	})
 
 	t.Run("EqualImmutableValues_ImmutableMap", func(t *testing.T) {
