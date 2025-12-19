@@ -7,6 +7,8 @@ import (
 	"sync"
 )
 
+// todo: memoize having scanned all elements for subcontainers for sake of Clone()
+
 type (
 	// ImmutableValue has a concrete type is either ImmutableMap,
 	// ImmutableSlice, or a literal Go type, in contrast to Value, which
@@ -17,24 +19,24 @@ type (
 	//
 	// ImmutableMap methods are safe for concurrent use.
 	ImmutableMap struct {
-		base        map[string]any
-		overwrites  map[string]ImmutableValue
-		mu          sync.Mutex
-		jsonBytes   []byte
-		jsonError   error
-		jsonMarshal sync.Once
+		base          map[string]any
+		subContainers map[string]ImmutableValue
+		mu            sync.Mutex
+		jsonBytes     []byte
+		jsonError     error
+		jsonMarshal   sync.Once
 	}
 
 	// ImmutableSlice provides a slice of values.
 	//
 	// ImmutableSlice methods are safe for concurrent use.
 	ImmutableSlice struct {
-		base        []any
-		overwrites  map[int]ImmutableValue
-		mu          sync.Mutex
-		jsonBytes   []byte
-		jsonError   error
-		jsonMarshal sync.Once
+		base          []any
+		subContainers map[int]ImmutableValue
+		mu            sync.Mutex
+		jsonBytes     []byte
+		jsonError     error
+		jsonMarshal   sync.Once
 	}
 )
 
@@ -93,7 +95,7 @@ func (m *ImmutableMap) Get(key string) (ImmutableValue, bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if v, ok := m.overwrites[key]; ok {
+	if v, ok := m.subContainers[key]; ok {
 		return v, true
 	}
 
@@ -104,10 +106,10 @@ func (m *ImmutableMap) Get(key string) (ImmutableValue, bool) {
 
 	v, ok := isContainer(vBase)
 	if ok {
-		if m.overwrites == nil {
-			m.overwrites = make(map[string]ImmutableValue)
+		if m.subContainers == nil {
+			m.subContainers = make(map[string]ImmutableValue)
 		}
-		m.overwrites[key] = v
+		m.subContainers[key] = v
 	}
 
 	return v, true
@@ -227,17 +229,17 @@ func (s *ImmutableSlice) At(index int) ImmutableValue {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if v, ok := s.overwrites[index]; ok {
+	if v, ok := s.subContainers[index]; ok {
 		return v
 	}
 
 	vBase := s.base[index]
 	v, ok := isContainer(vBase)
 	if ok {
-		if s.overwrites == nil {
-			s.overwrites = make(map[int]ImmutableValue)
+		if s.subContainers == nil {
+			s.subContainers = make(map[int]ImmutableValue)
 		}
-		s.overwrites[index] = v
+		s.subContainers[index] = v
 	}
 
 	return v
