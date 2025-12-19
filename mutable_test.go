@@ -313,6 +313,110 @@ func TestMutable(t *testing.T) {
 			}
 			assert.Equal(t, expectIm2, im2.Export())
 		})
+
+		t.Run("clone with child map", func(t *testing.T) {
+			p := NewImmutableMap(map[string]any{"key": map[string]any{"sub": "val"}})
+			mp1 := p.Mutable()
+			mp2 := mp1.Clone()
+			mp3 := mp1.Clone()
+
+			k1, ok := mp1.Get("key")
+			require.True(t, ok)
+			k1Map, ok := k1.(*Map)
+			require.True(t, ok)
+
+			k2, ok := mp2.Get("key")
+			require.True(t, ok)
+			k2Map, ok := k2.(*Map)
+			require.True(t, ok)
+
+			k3, ok := mp3.Get("key")
+			require.True(t, ok)
+			k3Map, ok := k3.(*Map)
+			require.True(t, ok)
+
+			require.Same(t, k1Map, k2Map)
+			require.Same(t, k1Map, k3Map)
+
+			k1Map.Set("sub", "val-modified")
+
+			p1 := mp1.Immutable()
+			pk1, ok := p1.Get("key")
+			require.True(t, ok)
+			pk1Map, ok := pk1.(*ImmutableMap)
+			require.True(t, ok)
+			v, ok := pk1Map.Get("sub")
+			require.True(t, ok)
+			assert.Equal(t, "val-modified", v)
+
+			p2 := mp2.Immutable()
+			pk2, ok := p2.Get("key")
+			require.True(t, ok)
+			pk2Map, ok := pk2.(*ImmutableMap)
+			require.True(t, ok)
+			v2, ok := pk2Map.Get("sub")
+			require.True(t, ok)
+			assert.Equal(t, "val-modified", v2)
+
+			p3 := mp3.Immutable()
+			pk3, ok := p3.Get("key")
+			require.True(t, ok)
+			pk3Map, ok := pk3.(*ImmutableMap)
+			require.True(t, ok)
+			v3, ok := pk3Map.Get("sub")
+			require.True(t, ok)
+			assert.Equal(t, "val-modified", v3)
+		})
+
+		t.Run("clone with child slice", func(t *testing.T) {
+			p := NewImmutableMap(map[string]any{"key": []any{"elem"}})
+			mp1 := p.Mutable()
+			mp2 := mp1.Clone()
+			mp3 := mp1.Clone()
+
+			k1, ok := mp1.Get("key")
+			require.True(t, ok)
+			k1Slice, ok := k1.(*Slice)
+			require.True(t, ok)
+
+			k2, ok := mp2.Get("key")
+			require.True(t, ok)
+			k2Slice, ok := k2.(*Slice)
+			require.True(t, ok)
+
+			k3, ok := mp3.Get("key")
+			require.True(t, ok)
+			k3Slice, ok := k3.(*Slice)
+			require.True(t, ok)
+
+			require.Same(t, k1Slice, k2Slice)
+			require.Same(t, k1Slice, k3Slice)
+			k1Slice.Set(0, "elem-modified")
+
+			p1 := mp1.Immutable()
+			pk1, ok := p1.Get("key")
+			require.True(t, ok)
+			pk1Slice, ok := pk1.(*ImmutableSlice)
+			require.True(t, ok)
+			v := pk1Slice.At(0)
+			assert.Equal(t, "elem-modified", v)
+
+			p2 := mp2.Immutable()
+			pk2, ok := p2.Get("key")
+			require.True(t, ok)
+			pk2Slice, ok := pk2.(*ImmutableSlice)
+			require.True(t, ok)
+			v2 := pk2Slice.At(0)
+			assert.Equal(t, "elem-modified", v2)
+
+			p3 := mp3.Immutable()
+			pk3, ok := p3.Get("key")
+			require.True(t, ok)
+			pk3Slice, ok := pk3.(*ImmutableSlice)
+			require.True(t, ok)
+			v3 := pk3Slice.At(0)
+			assert.Equal(t, "elem-modified", v3)
+		})
 	})
 
 	t.Run("MutableSlice", func(t *testing.T) {
@@ -889,6 +993,99 @@ func TestMutable(t *testing.T) {
 			mut.ReSlice(1, 2)
 			require.Equal(t, 1, mut.Len())
 			assert.Equal(t, "e1", mut.At(0))
+		})
+
+		t.Run("clone with child map", func(t *testing.T) {
+			p := NewImmutableSlice([]any{map[string]any{"sub": "val"}})
+			mp1 := p.Mutable()
+			mp2 := mp1.Clone()
+			mp3 := mp1.Clone()
+
+			k1 := mp1.At(0)
+			k1Map, ok := k1.(*Map)
+			require.True(t, ok)
+
+			k2 := mp2.At(0)
+			k2Map, ok := k2.(*Map)
+			require.True(t, ok)
+
+			k3 := mp3.At(0)
+			k3Map, ok := k3.(*Map)
+			require.True(t, ok)
+
+			require.Same(t, k1Map, k2Map)
+			require.Same(t, k1Map, k3Map)
+
+			k1Map.Set("sub", "val-modified")
+
+			p1 := mp1.Immutable()
+			pk1 := p1.At(0)
+			pk1Map, ok := pk1.(*ImmutableMap)
+			require.True(t, ok)
+			v, ok := pk1Map.Get("sub")
+			require.True(t, ok)
+			assert.Equal(t, "val-modified", v)
+
+			p2 := mp2.Immutable()
+			pk2 := p2.At(0)
+			pk2Map, ok := pk2.(*ImmutableMap)
+			require.True(t, ok)
+			v2, ok := pk2Map.Get("sub")
+			require.True(t, ok)
+			assert.Equal(t, "val-modified", v2)
+
+			p3 := mp3.Immutable()
+			pk3 := p3.At(0)
+			pk3Map, ok := pk3.(*ImmutableMap)
+			require.True(t, ok)
+			v3, ok := pk3Map.Get("sub")
+			require.True(t, ok)
+			assert.Equal(t, "val-modified", v3)
+		})
+
+		t.Run("clone with child slice", func(t *testing.T) {
+			p := NewImmutableSlice([]any{[]any{"elem"}})
+			mp1 := p.Mutable()
+			mp2 := mp1.Clone()
+			mp3 := mp1.Clone()
+
+			k1 := mp1.At(0)
+			k1Slice, ok := k1.(*Slice)
+			require.True(t, ok)
+
+			k2 := mp2.At(0)
+			k2Slice, ok := k2.(*Slice)
+			require.True(t, ok)
+
+			k3 := mp3.At(0)
+			k3Slice, ok := k3.(*Slice)
+			require.True(t, ok)
+
+			require.Same(t, k1Slice, k2Slice)
+			require.Same(t, k1Slice, k3Slice)
+			k1Slice.Set(0, "elem-modified")
+
+			p1 := mp1.Immutable()
+			pk1 := p1.At(0)
+			require.True(t, ok)
+			pk1Slice, ok := pk1.(*ImmutableSlice)
+			require.True(t, ok)
+			v := pk1Slice.At(0)
+			assert.Equal(t, "elem-modified", v)
+
+			p2 := mp2.Immutable()
+			pk2 := p2.At(0)
+			pk2Slice, ok := pk2.(*ImmutableSlice)
+			require.True(t, ok)
+			v2 := pk2Slice.At(0)
+			assert.Equal(t, "elem-modified", v2)
+
+			p3 := mp3.Immutable()
+			pk3 := p3.At(0)
+			pk3Slice, ok := pk3.(*ImmutableSlice)
+			require.True(t, ok)
+			v3 := pk3Slice.At(0)
+			assert.Equal(t, "elem-modified", v3)
 		})
 	})
 }

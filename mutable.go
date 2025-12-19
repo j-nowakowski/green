@@ -6,6 +6,7 @@ import (
 	"iter"
 	"maps"
 	"slices"
+	"sync"
 )
 
 type (
@@ -24,16 +25,7 @@ type (
 		// deletions are writes that remove values from base. As an invariant, a
 		// key cannot be present in both overwrites and deletions.
 		deletions map[string]struct{}
-		// parent is the parent container of this map, if any. It is used to
-		// signal dirty state to the parent when this map or a nested container
-		// is mutated.
-		parent reportable
-		// originalParent tracks the parent container of the original copy of
-		// the map when the map was created via Clone(). It is used to signal
-		// dirty state to the original parent when nested, shared data is
-		// mutated, but to avoid making such signals if the mutation is on the
-		// clone only.
-		originalParent reportable
+		parents   []reportable
 		// dirty tracks whether this map or a nested container has been mutated
 		// since creation.
 		dirty bool
@@ -61,15 +53,7 @@ type (
 		// optimize for Go slices' native append functionality, this slice
 		// contains the front elements in reverse order.
 		prepends []any
-		// parent is the parent container of this slice, if any. It is used to
-		// signal dirty state to the parent when this slice or a nested
-		// container is mutated.
-		parent reportable
-		// originalParent tracks the parent of the original copy of the slice
-		// when the slice was created via Clone(). It is used to signal dirty
-		// state to the original parent when nested, shared data is mutated, but
-		// to avoid making such signals if the mutation is on the clone only.
-		originalParent reportable
+		parents  []reportable
 		// dirty tracks whether this slice or a nested container has been
 		// mutated since creation.
 		dirty bool
@@ -264,17 +248,26 @@ func (m *Map) Clone() *Map {
 	}
 
 	for range m.All() {
-		// force wrapping of immediately nested values
 	}
 
-	return &Map{
-		base:           m.base,
-		overwrites:     maps.Clone(m.overwrites),
-		deletions:      maps.Clone(m.deletions),
-		originalParent: m.originalParent,
-		dirty:          m.dirty,
-		len:            m.len,
+	m2 := &Map{
+		base:       m.base,
+		overwrites: maps.Clone(m.overwrites),
+		deletions:  maps.Clone(m.deletions),
+		dirty:      m.dirty,
+		len:        m.len,
 	}
+
+	for _, v := range m.All() {
+		switch vv := v.(type) {
+		case *Slice:
+			vv.parents = append(vv.parents, m2)
+		case *Map:
+			vv.parents = append(vv.parents, m2)
+		}
+	}
+
+	return m2
 }
 
 // Export returns a deep copy of the Map, with all values converted to the
@@ -572,19 +565,27 @@ func (s *Slice) Clone() *Slice {
 	}
 
 	for range s.All() {
-		// force wrapping of immediately nested values
 	}
 
-	return &Slice{
+	s2 := &Slice{
 		base:            s.base,
 		overwrites:      maps.Clone(s.overwrites),
 		overwriteOffset: s.overwriteOffset,
 		appends:         slices.Clone(s.appends),
 		prepends:        slices.Clone(s.prepends),
-		parent:          s.parent,
-		originalParent:  s.originalParent,
 		dirty:           s.dirty,
 	}
+
+	for _, v := range s.All() {
+		switch vv := v.(type) {
+		case *Slice:
+			vv.parents = append(vv.parents, s2)
+		case *Map:
+			vv.parents = append(vv.parents, s2)
+		}
+	}
+
+	return s2
 }
 
 // Export returns a deep copy of the slice, with all values converted to the
@@ -633,23 +634,19 @@ func isContainerMutable(v any, parent reportable) (any, bool) {
 	switch v := v.(type) {
 	case *ImmutableMap:
 		v2 := v.Mutable()
-		v2.parent = parent
-		v2.originalParent = parent
+		v2.parents = []reportable{parent}
 		return v2, true
 	case *ImmutableSlice:
 		v2 := v.Mutable()
-		v2.parent = parent
-		v2.originalParent = parent
+		v2.parents = []reportable{parent}
 		return v2, true
 	case map[string]any:
 		v2 := NewImmutableMap(v).Mutable()
-		v2.parent = parent
-		v2.originalParent = parent
+		v2.parents = []reportable{parent}
 		return v2, true
 	case []any:
 		v2 := NewImmutableSlice(v).Mutable()
-		v2.parent = parent
-		v2.originalParent = parent
+		v2.parents = []reportable{parent}
 		return v2, true
 	default:
 		return v, false
@@ -667,12 +664,15 @@ func (m *Map) handleBaseValue(k string, v any) any {
 func (m *Map) reportDirty() {
 	if !m.dirty {
 		m.dirty = true
-		if m.parent != nil {
-			m.parent.reportDirty()
+		var wg sync.WaitGroup
+		for _, p := range m.parents {
+			wg.Add(1)
+			go func(p reportable) {
+				defer wg.Done()
+				p.reportDirty()
+			}(p)
 		}
-		if m.originalParent != nil {
-			m.originalParent.reportDirty()
-		}
+		wg.Wait()
 	}
 }
 
@@ -693,12 +693,15 @@ func (m *Map) addDeletion(k string) {
 func (s *Slice) reportDirty() {
 	if !s.dirty {
 		s.dirty = true
-		if s.parent != nil {
-			s.parent.reportDirty()
+		var wg sync.WaitGroup
+		for _, p := range s.parents {
+			wg.Add(1)
+			go func(p reportable) {
+				defer wg.Done()
+				p.reportDirty()
+			}(p)
 		}
-		if s.originalParent != nil {
-			s.originalParent.reportDirty()
-		}
+		wg.Wait()
 	}
 }
 
@@ -804,8 +807,7 @@ func (s *Slice) subSlice(l, r int, funcName string) *Slice {
 		overwriteOffset: newOverwriteOffset,
 		appends:         newAppends,
 		prepends:        newPrepends,
-		parent:          s.parent,
-		originalParent:  s.originalParent,
+		parents:         s.parents,
 		dirty:           s.dirty,
 	}
 }
