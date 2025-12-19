@@ -417,6 +417,36 @@ func TestMutable(t *testing.T) {
 			v3 := pk3Slice.At(0)
 			assert.Equal(t, "elem-modified", v3)
 		})
+
+		t.Run("instance management when switching from immutable to mutable to immutable", func(t *testing.T) {
+			raw := map[string]any{"key": map[string]any{"sub": "val"}}
+			im := NewImmutableMap(raw)
+			mut := im.Mutable()
+			mut.Set("other-key", "foo")
+			im2 := mut.Immutable()
+
+			sm1, ok := im.Get("key")
+			require.True(t, ok)
+			sm2, ok := im2.Get("key")
+			require.True(t, ok)
+			assert.Same(t, sm1, sm2)
+		})
+
+		t.Run("clone a dirty map", func(t *testing.T) {
+			raw := map[string]any{}
+			im := NewImmutableMap(raw)
+			mut := im.Mutable()
+			mut.Set("foo", "bar")
+			mutClone := mut.Clone()
+			im2 := mut.Immutable()
+			im2Clone := mutClone.Immutable()
+			foo2, ok := im2.Get("foo")
+			require.True(t, ok)
+			foo2Clone, ok := im2Clone.Get("foo")
+			require.True(t, ok)
+			assert.Equal(t, "bar", foo2)
+			assert.Equal(t, "bar", foo2Clone)
+		})
 	})
 
 	t.Run("MutableSlice", func(t *testing.T) {
@@ -1086,6 +1116,20 @@ func TestMutable(t *testing.T) {
 			require.True(t, ok)
 			v3 := pk3Slice.At(0)
 			assert.Equal(t, "elem-modified", v3)
+		})
+
+		t.Run("clone a dirty slice", func(t *testing.T) {
+			raw := []any{}
+			im := NewImmutableSlice(raw)
+			mut := im.Mutable()
+			mut.Push("bar")
+			mutClone := mut.Clone()
+			im2 := mut.Immutable()
+			im2Clone := mutClone.Immutable()
+			foo2 := im2.At(0)
+			foo2Clone := im2Clone.At(0)
+			assert.Equal(t, "bar", foo2)
+			assert.Equal(t, "bar", foo2Clone)
 		})
 	})
 }
