@@ -21,11 +21,11 @@ type (
 	Map struct {
 		base *ImmutableMap
 		// overwrites are writes that override values in base.
+		// It might contain raw Go containers or green containers.
+		// We update to mutable green containers the first time
+		// an element is accessed.
 		overwrites map[string]any
-		// deletions are writes that remove values from base. As an invariant, a
-		// key cannot be present in both overwrites and deletions.
-		deletions map[string]struct{}
-		parents   []reportable
+		parents    []reportable
 		// dirty tracks whether this map or a nested container has been mutated
 		// since creation.
 		dirty bool
@@ -75,7 +75,10 @@ func (m *Map) Get(key string) (Value, bool) {
 	}
 
 	if v, ok := m.overwrites[key]; ok {
-		v = m.handleBaseValue(key, v)
+		if isDeleted(v) {
+			return nil, false
+		}
+		v = m.handleNewValue(key, v)
 		return v, true
 	}
 
@@ -84,29 +87,23 @@ func (m *Map) Get(key string) (Value, bool) {
 		return nil, false
 	}
 
-	if _, deleted := m.deletions[key]; deleted {
-		return nil, false
-	}
-
-	v = m.handleBaseValue(key, v)
+	v = m.handleNewValue(key, v)
 	return v, true
 }
 
 // Has returns whether the Map contains a value for the given key. If the Map is
 // nil, this always returns false.
 //
-// This has O(1) time complexity. It never triggers one-time shallow copies.
+// This has O(1) time complexity.
 func (m *Map) Has(key string) bool {
 	if m == nil {
 		return false
 	}
 
-	if _, ok := m.overwrites[key]; ok {
-		return true
+	if v, ok := m.overwrites[key]; ok {
+		return !isDeleted(v)
 	}
-	if _, ok := m.deletions[key]; ok {
-		return false
-	}
+
 	return m.base.Has(key)
 }
 
@@ -124,8 +121,7 @@ func (m *Map) Set(key string, val any) {
 	}
 
 	keyExisted := m.Has(key)
-	m.addOverwrite(key, val)
-	delete(m.deletions, key)
+	m.setOverwrite(key, val)
 	if !keyExisted {
 		m.len++
 	}
@@ -142,8 +138,7 @@ func (m *Map) Delete(key string) {
 	}
 
 	keyExisted := m.Has(key)
-	m.addDeletion(key)
-	delete(m.overwrites, key)
+	m.setOverwrite(key, deleted)
 	if keyExisted {
 		m.len--
 		m.reportDirty()
@@ -177,19 +172,19 @@ func (m *Map) All() iter.Seq2[string, Value] {
 			return
 		}
 		for k, v := range m.overwrites {
-			v = m.handleBaseValue(k, v)
+			if isDeleted(v) {
+				continue
+			}
+			v = m.handleNewValue(k, v)
 			if !yield(k, v) {
 				return
 			}
 		}
 		for k, v := range m.base.All() {
-			if _, deleted := m.deletions[k]; deleted {
-				continue
-			}
 			if _, overwritten := m.overwrites[k]; overwritten {
 				continue
 			}
-			v = m.handleBaseValue(k, v)
+			v = m.handleNewValue(k, v)
 			if !yield(k, v) {
 				return
 			}
@@ -218,14 +213,12 @@ func (m *Map) Immutable() *ImmutableMap {
 			im[k] = v.Immutable()
 		case *Slice:
 			im[k] = v.Immutable()
+		case deletedType:
 		default:
 			im[k] = v
 		}
 	}
 	for k, v := range m.base.All() {
-		if _, deleted := m.deletions[k]; deleted {
-			continue
-		}
 		if _, overwritten := m.overwrites[k]; overwritten {
 			continue
 		}
@@ -253,7 +246,6 @@ func (m *Map) Clone() *Map {
 	m2 := &Map{
 		base:       m.base,
 		overwrites: maps.Clone(m.overwrites),
-		deletions:  maps.Clone(m.deletions),
 		dirty:      m.dirty,
 		len:        m.len,
 	}
@@ -324,7 +316,7 @@ func (s *Slice) At(index int) Value {
 	if index < len(s.prepends) {
 		prependIndex := s.prependIndex(index)
 		v := s.prepends[prependIndex]
-		v, ok := isContainerMutable(v, s)
+		v, ok := asNewMutableContainer(v, s)
 		if ok {
 			s.prepends[prependIndex] = v
 		}
@@ -336,15 +328,15 @@ func (s *Slice) At(index int) Value {
 	if index < s.base.Len() {
 		v, ok := s.getOverride(index)
 		if ok {
-			v, ok := isContainerMutable(v, s)
+			v, ok := asNewMutableContainer(v, s)
 			if ok {
-				s.addOverwrite(index, v)
+				s.setOverwrite(index, v)
 			}
 			return v
 		}
-		v, ok = isContainerMutable(s.base.At(index), s)
+		v, ok = asNewMutableContainer(s.base.At(index), s)
 		if ok {
-			s.addOverwrite(index, v)
+			s.setOverwrite(index, v)
 		}
 		return v
 	}
@@ -352,7 +344,7 @@ func (s *Slice) At(index int) Value {
 	// in appends
 	index -= s.base.Len()
 	v := s.appends[index]
-	v, ok := isContainerMutable(v, s)
+	v, ok := asNewMutableContainer(v, s)
 	if ok {
 		s.appends[index] = v
 	}
@@ -386,7 +378,7 @@ func (s *Slice) Set(index int, val any) {
 
 	// in overwrites?
 	if index < s.base.Len() {
-		s.addOverwrite(index, val)
+		s.setOverwrite(index, val)
 		return
 	}
 
@@ -474,7 +466,7 @@ func (s *Slice) All() iter.Seq2[int, Value] {
 		}
 		for i := s.prependIndex(0); i >= 0; i-- {
 			v := s.prepends[i]
-			v, ok := isContainerMutable(v, s)
+			v, ok := asNewMutableContainer(v, s)
 			if ok {
 				s.prepends[i] = v
 			}
@@ -486,16 +478,16 @@ func (s *Slice) All() iter.Seq2[int, Value] {
 			if v2, ok := s.getOverride(i); ok {
 				v = v2
 			}
-			v, ok := isContainerMutable(v, s)
+			v, ok := asNewMutableContainer(v, s)
 			if ok {
-				s.addOverwrite(i, v)
+				s.setOverwrite(i, v)
 			}
 			if !yield(i+len(s.prepends), v) {
 				return
 			}
 		}
 		for i, v := range s.appends {
-			v, ok := isContainerMutable(v, s)
+			v, ok := asNewMutableContainer(v, s)
 			if ok {
 				s.appends[i] = v
 			}
@@ -630,7 +622,7 @@ type (
 	}
 )
 
-func isContainerMutable(v any, parent reportable) (any, bool) {
+func asNewMutableContainer(v any, parent reportable) (any, bool) {
 	switch v := v.(type) {
 	case *ImmutableMap:
 		v2 := v.Mutable()
@@ -653,10 +645,10 @@ func isContainerMutable(v any, parent reportable) (any, bool) {
 	}
 }
 
-func (m *Map) handleBaseValue(k string, v any) any {
-	v, ok := isContainerMutable(v, m)
+func (m *Map) handleNewValue(k string, v any) any {
+	v, ok := asNewMutableContainer(v, m)
 	if ok {
-		m.addOverwrite(k, v)
+		m.setOverwrite(k, v)
 	}
 	return v
 }
@@ -676,18 +668,11 @@ func (m *Map) reportDirty() {
 	}
 }
 
-func (m *Map) addOverwrite(k string, v any) {
+func (m *Map) setOverwrite(k string, v any) {
 	if m.overwrites == nil {
 		m.overwrites = make(map[string]any)
 	}
 	m.overwrites[k] = v
-}
-
-func (m *Map) addDeletion(k string) {
-	if m.deletions == nil {
-		m.deletions = make(map[string]struct{})
-	}
-	m.deletions[k] = struct{}{}
 }
 
 func (s *Slice) reportDirty() {
@@ -705,7 +690,7 @@ func (s *Slice) reportDirty() {
 	}
 }
 
-func (s *Slice) addOverwrite(i int, v any) {
+func (s *Slice) setOverwrite(i int, v any) {
 	if s.overwrites == nil {
 		s.overwrites = make(map[int]any)
 	}
@@ -780,13 +765,13 @@ func (s *Slice) subSlice(l, r int, funcName string) *Slice {
 
 	// force wrapping of immediately nested values
 	for i, v := range newPrepends {
-		v, ok := isContainerMutable(v, s)
+		v, ok := asNewMutableContainer(v, s)
 		if ok {
 			newPrepends[i] = v // updates underlying array too
 		}
 	}
 	for i, v := range newAppends {
-		v, ok := isContainerMutable(v, s)
+		v, ok := asNewMutableContainer(v, s)
 		if ok {
 			newAppends[i] = v // updates underlying array too
 		}
@@ -795,9 +780,9 @@ func (s *Slice) subSlice(l, r int, funcName string) *Slice {
 		if v2, ok := s.getOverride(i + newOverwriteOffset); ok {
 			v = v2
 		}
-		v, ok := isContainerMutable(v, s)
+		v, ok := asNewMutableContainer(v, s)
 		if ok {
-			s.addOverwrite(i+newOverwriteOffset, v)
+			s.setOverwrite(i+newOverwriteOffset, v)
 		}
 	}
 
@@ -815,4 +800,13 @@ func (s *Slice) subSlice(l, r int, funcName string) *Slice {
 func (s *Slice) getOverride(i int) (any, bool) {
 	v, ok := s.overwrites[i+s.overwriteOffset]
 	return v, ok
+}
+
+type deletedType struct{}
+
+var deleted = deletedType{}
+
+func isDeleted(v any) bool {
+	_, ok := v.(deletedType)
+	return ok
 }

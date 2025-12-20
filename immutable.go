@@ -7,8 +7,6 @@ import (
 	"sync"
 )
 
-// todo: memoize having scanned all elements for subcontainers for sake of Clone()
-
 type (
 	// ImmutableValue has a concrete type is either ImmutableMap,
 	// ImmutableSlice, or a literal Go type, in contrast to Value, which
