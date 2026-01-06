@@ -20,10 +20,10 @@ type (
 	// a Map concurrently, first convert it to an ImmutableMap via Immutable().
 	Map struct {
 		base *ImmutableMap
-		// overwrites are writes that override values in base.
-		// It might contain raw Go containers or green containers.
-		// We update to mutable green containers the first time
-		// an element is accessed.
+		// overwrites contains values which override values in base.
+		// Overwrites can come from the user Setting or Deleting fields,
+		// but can also come from the user Getting a container element
+		// from base which first gets wrapped.
 		overwrites map[string]any
 		parents    []reportable
 		// dirty tracks whether this map or a nested container has been mutated

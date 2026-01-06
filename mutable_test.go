@@ -447,6 +447,36 @@ func TestMutable(t *testing.T) {
 			assert.Equal(t, "bar", foo2)
 			assert.Equal(t, "bar", foo2Clone)
 		})
+
+		t.Run("nested immutable map instance management", func(t *testing.T) {
+			m := map[string]any{
+				"k1": map[string]any{},
+				"k2": []any{},
+			}
+			im := NewImmutableMap(m)
+			mut := im.Mutable()
+			mut.Set("k3", "foo")
+			im2 := mut.Immutable()
+			im3 := mut.Immutable()
+
+			m1, ok := im.Get("k1")
+			require.True(t, ok)
+			m2, ok := im2.Get("k1")
+			require.True(t, ok)
+			m3, ok := im3.Get("k1")
+			require.True(t, ok)
+			require.Same(t, m1, m2)
+			require.Same(t, m1, m3)
+
+			s1, ok := im.Get("k2")
+			require.True(t, ok)
+			s2, ok := im2.Get("k2")
+			require.True(t, ok)
+			s3, ok := im3.Get("k2")
+			require.True(t, ok)
+			require.Same(t, s1, s2)
+			require.Same(t, s1, s3)
+		})
 	})
 
 	t.Run("MutableSlice", func(t *testing.T) {
@@ -1130,6 +1160,31 @@ func TestMutable(t *testing.T) {
 			foo2Clone := im2Clone.At(0)
 			assert.Equal(t, "bar", foo2)
 			assert.Equal(t, "bar", foo2Clone)
+		})
+
+		t.Run("nested immutable slice instance management", func(t *testing.T) {
+			s := []any{
+				map[string]any{},
+				[]any{},
+				"foo",
+			}
+			im := NewImmutableSlice(s)
+			mut := im.Mutable()
+			mut.Set(2, "foo2")
+			im2 := mut.Immutable()
+			im3 := mut.Immutable()
+
+			m1 := im.At(0)
+			m2 := im2.At(0)
+			m3 := im3.At(0)
+			require.Same(t, m1, m2)
+			require.Same(t, m1, m3)
+
+			s1 := im.At(1)
+			s2 := im2.At(1)
+			s3 := im3.At(1)
+			require.Same(t, s1, s2)
+			require.Same(t, s1, s3)
 		})
 	})
 }
