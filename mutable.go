@@ -91,6 +91,26 @@ func (m *Map) Get(key string) (Value, bool) {
 	return v, true
 }
 
+func (m *Map) getRaw(key string) (Value, bool) {
+	if m == nil {
+		return nil, false
+	}
+
+	if v, ok := m.overwrites[key]; ok {
+		if isDeleted(v) {
+			return nil, false
+		}
+		return v, true
+	}
+
+	v, ok := m.base.Get(key)
+	if !ok {
+		return nil, false
+	}
+
+	return v, true
+}
+
 // Has returns whether the Map contains a value for the given key. If the Map is
 // nil, this always returns false.
 //
@@ -192,6 +212,30 @@ func (m *Map) All() iter.Seq2[string, Value] {
 	}
 }
 
+func (m *Map) allRaw() iter.Seq2[string, ImmutableValue] {
+	return func(yield func(string, ImmutableValue) bool) {
+		if m == nil {
+			return
+		}
+		for k, v := range m.overwrites {
+			if isDeleted(v) {
+				continue
+			}
+			if !yield(k, v) {
+				return
+			}
+		}
+		for k, v := range m.base.All() {
+			if _, overwritten := m.overwrites[k]; overwritten {
+				continue
+			}
+			if !yield(k, v) {
+				return
+			}
+		}
+	}
+}
+
 // Immutable returns an immutable version of the Map. Subsequent mutations to
 // the Map do not affect the returned ImmutableMap. If the Map is nil, this
 // returns nil.
@@ -206,25 +250,24 @@ func (m *Map) Immutable() *ImmutableMap {
 		return m.base
 	}
 
-	im := make(map[string]any, m.Len())
-	for k, v := range m.overwrites { // we don't call m.All() because that eagerly wraps as Values
+	newOverwrites := make(map[string]any, len(m.overwrites))
+	for k, v := range m.overwrites {
 		switch v := v.(type) {
 		case *Map:
-			im[k] = v.Immutable()
+			newOverwrites[k] = v.Immutable()
 		case *Slice:
-			im[k] = v.Immutable()
-		case deletedType:
+			newOverwrites[k] = v.Immutable()
 		default:
-			im[k] = v
+			newOverwrites[k] = v
 		}
 	}
-	for k, v := range m.base.All() {
-		if _, overwritten := m.overwrites[k]; overwritten {
-			continue
-		}
-		im[k] = v
+	return &ImmutableMap{
+		inherited: &Map{
+			overwrites: newOverwrites,
+			base:       m.base,
+			len:        m.Len(),
+		},
 	}
-	return &ImmutableMap{base: im}
 }
 
 // Clone returns a shallow copy of the Map. Subsequent mutations to the clone do

@@ -17,6 +17,7 @@ type (
 	//
 	// ImmutableMap methods are safe for concurrent use.
 	ImmutableMap struct {
+		inherited     *Map
 		base          map[string]any
 		subContainers map[string]ImmutableValue
 		mu            sync.Mutex
@@ -90,6 +91,10 @@ func (m *ImmutableMap) Get(key string) (ImmutableValue, bool) {
 		return nil, false
 	}
 
+	if m.inherited != nil {
+		return m.inherited.getRaw(key)
+	}
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -122,6 +127,11 @@ func (m *ImmutableMap) Has(key string) bool {
 		return false
 	}
 
+	if m.inherited != nil {
+		_, ok := m.inherited.getRaw(key)
+		return ok
+	}
+
 	_, ok := m.base[key]
 	return ok
 }
@@ -135,6 +145,10 @@ func (m *ImmutableMap) Len() int {
 		return 0
 	}
 
+	if m.inherited != nil {
+		return m.inherited.Len()
+	}
+
 	return len(m.base)
 }
 
@@ -146,6 +160,10 @@ func (m *ImmutableMap) Len() int {
 // This has O(k') average time complexity, where k' is the number of key-value
 // pairs in the map which get iterated over.
 func (m *ImmutableMap) All() iter.Seq2[string, ImmutableValue] {
+	if m.inherited != nil {
+		return m.inherited.allRaw()
+	}
+
 	return func(yield func(string, ImmutableValue) bool) {
 		if m == nil {
 			return
